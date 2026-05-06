@@ -1,0 +1,711 @@
+using System.Diagnostics;
+using System.IO.Pipes;
+using System.Net;
+using System.Net.Http;
+using System.Security.Cryptography;
+using System.Text;
+using System.Text.Json;
+using UOAIO.Launcher.Core;
+using UOAIO.ShardRuntime;
+using UOAIO.Update;
+
+namespace UOAIO.Tests;
+
+internal static class Program
+{
+    private static readonly JsonSerializerOptions JsonOptions = new() { PropertyNamingPolicy = JsonNamingPolicy.CamelCase, WriteIndented = true };
+
+    public static async Task<int> Main()
+    {
+        List<(string Name, Func<Task> Test)> tests = new()
+        {
+            ("Shard catalog parsing and shard-id workflow resolution", TestShardCatalogAndWorkflowRegistryAsync),
+            ("Per-shard remembered state encryption and filtering", TestShardDefinitionStateStoreAsync),
+            ("Client bootstrap payload creation and round-trip", TestClientBootstrapRoundTripAsync),
+            ("UO New Dawn Discord OAuth authorization service", TestUoNewDawnAuthorizationServiceAsync),
+            ("UO New Dawn workflow state machine", TestUoNewDawnWorkflowStateMachineAsync),
+            ("Active shard state round-trip", TestActiveShardStateRoundTripAsync),
+            ("License client success and failure handling", TestLicenseClientAsync),
+            ("Release manifest signature verification", TestManifestVerificationAsync),
+            ("Bootstrapper stage/apply/rollback", TestUpdateCoordinatorAsync)
+        };
+
+        int failures = 0;
+        foreach ((string name, Func<Task> test) in tests)
+        {
+            try
+            {
+                await test().ConfigureAwait(false);
+                Console.WriteLine($"PASS  {name}");
+            }
+            catch (Exception ex)
+            {
+                failures++;
+                Console.WriteLine($"FAIL  {name}");
+                Console.WriteLine($"      {ex.Message}");
+            }
+        }
+
+        Console.WriteLine(failures == 0
+            ? $"All {tests.Count} tests passed."
+            : $"{failures} of {tests.Count} tests failed.");
+
+        return failures == 0 ? 0 : 1;
+    }
+
+    private static async Task TestShardCatalogAndWorkflowRegistryAsync()
+    {
+        string root = CreateTempDirectory();
+        try
+        {
+            string manifestPath = Path.Combine(root, "shards.json");
+            await File.WriteAllTextAsync(manifestPath, JsonSerializer.Serialize(new ShardCatalog
+            {
+                Shards = new List<ShardDefinition>
+                {
+                    new()
+                    {
+                        Id = "new-renaissance",
+                        Name = "New Renaissance",
+                        Description = "Test shard",
+                        Host = "play.newrenaissanceuo.com",
+                        ServerPort = 2593,
+                        Metadata = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+                        {
+                            ["displayGroup"] = "recommended"
+                        }
+                    }
+                }
+            }, JsonOptions)).ConfigureAwait(false);
+
+            ShardCatalogService catalogService = new();
+            ShardCatalog catalog = await catalogService.LoadAsync(manifestPath).ConfigureAwait(false);
+            Assert(catalog.Shards.Count == 1, "Expected one shard.");
+            Assert(!catalog.Shards[0].Metadata.ContainsKey("adapterId"), "Manifest should not depend on adapter ids.");
+
+            ShardWorkflowRegistry<string> workflows = new(new[]
+            {
+                new ShardWorkflowRegistration<string>("new-renaissance", "new-ren-flow"),
+                new ShardWorkflowRegistration<string>("uo-new-dawn", "uond-flow")
+            });
+
+            string workflowId = workflows.Resolve(catalog.Shards[0].Id);
+            Assert(workflowId == "new-ren-flow", "Expected shard workflow registry to resolve by shard id.");
+
+            ShardDefinition runtimeShard = new()
+            {
+                Id = catalog.Shards[0].Id,
+                Name = catalog.Shards[0].Name,
+                Description = catalog.Shards[0].Description,
+                Host = catalog.Shards[0].Host,
+                Account = "tester",
+                Password = "secret",
+                ServerIP = IPAddress.Parse("203.0.113.10"),
+                ServerPort = 2593,
+                Metadata = new Dictionary<string, string>(catalog.Shards[0].Metadata, StringComparer.OrdinalIgnoreCase)
+            };
+
+            ClientBootstrapDefinition bootstrap = ClientBootstrapDefinitionFactory.Create(runtimeShard);
+
+            Assert(bootstrap.SchemaVersion == 2, "Expected client bootstrap schema version 2.");
+            Assert(bootstrap.Shard.ServerIP!.ToString() == "203.0.113.10", "Expected resolved IP address to be persisted.");
+            Assert(bootstrap.Shard.Account == "tester", "Expected bootstrap shard account to be populated.");
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    private static async Task TestShardDefinitionStateStoreAsync()
+    {
+        string appRoot = CreateTempDirectory();
+        try
+        {
+            LauncherPaths paths = new()
+            {
+                DataRoot = appRoot,
+                StateFilePath = Path.Combine(appRoot, "launcher-state.json"),
+                ActiveShardStateFilePath = Path.Combine(appRoot, "active-shard-state.json"),
+                ShardStateDirectory = Path.Combine(appRoot, "shards"),
+                ShardManifestPath = Path.Combine(appRoot, "shards.json")
+            };
+
+            ShardDefinitionStateStore store = new(paths);
+
+            ShardDefinition newRenaissance = new()
+            {
+                Id = "new-renaissance",
+                Name = "New Renaissance",
+                Host = "play.newrenaissanceuo.com",
+                Account = "tester",
+                Password = "secret-password",
+                ServerPort = 2593,
+                Metadata = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+                {
+                    ["displayGroup"] = "recommended"
+                }
+            };
+
+            await store.SaveAsync(newRenaissance).ConfigureAwait(false);
+            string newRenaissanceJson = await File.ReadAllTextAsync(store.GetPath("new-renaissance")).ConfigureAwait(false);
+            Assert(!newRenaissanceJson.Contains("secret-password", StringComparison.Ordinal), "Plaintext passwords must not be persisted.");
+            Assert(!newRenaissanceJson.Contains("displayGroup", StringComparison.Ordinal), "New Renaissance should not persist extra metadata.");
+
+            ShardDefinition rememberedNewRenaissance = store.ApplyRememberedState(new ShardDefinition
+            {
+                Id = "new-renaissance",
+                Name = "New Renaissance",
+                Host = "play.newrenaissanceuo.com",
+                ServerPort = 2593,
+                Metadata = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+                {
+                    ["displayGroup"] = "recommended"
+                }
+            });
+
+            Assert(rememberedNewRenaissance.Account == "tester", "Expected remembered account to round-trip.");
+            Assert(rememberedNewRenaissance.Password == "secret-password", "Expected remembered password to round-trip.");
+
+            ShardDefinition newDawn = new()
+            {
+                Id = "uo-new-dawn",
+                Name = "UO New Dawn",
+                Host = "proxy.uonewdawn.com",
+                Account = "newdawn-user-1",
+                Password = "3pQw5br24L7mML8w",
+                ServerPort = 2593,
+                Metadata = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+                {
+                    ["refresh_token"] = true.ToString(),
+                    ["jwt"] = "jwt-123",
+                    ["discord_id"] = "123",
+                    ["client_version"] = "1.0.0"
+                }
+            };
+
+            await store.SaveAsync(newDawn).ConfigureAwait(false);
+            string newDawnJson = await File.ReadAllTextAsync(store.GetPath("uo-new-dawn")).ConfigureAwait(false);
+            Assert(!newDawnJson.Contains("3pQw5br24L7mML8w", StringComparison.Ordinal), "UO New Dawn password must be encrypted at rest.");
+            Assert(newDawnJson.Contains("refresh_token", StringComparison.Ordinal), "Expected UO New Dawn refresh token preference to persist.");
+            Assert(!newDawnJson.Contains("jwt-123", StringComparison.Ordinal), "JWT metadata must not be persisted.");
+
+            ShardDefinition rememberedNewDawn = store.ApplyRememberedState(new ShardDefinition
+            {
+                Id = "uo-new-dawn",
+                Name = "UO New Dawn",
+                Host = "proxy.uonewdawn.com",
+                ServerPort = 2593,
+                Metadata = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+                {
+                    ["payload_url_primary"] = "https://primary.example/payload.json"
+                }
+            });
+
+            Assert(rememberedNewDawn.Account == "newdawn-user-1", "Expected remembered UO New Dawn account.");
+            Assert(rememberedNewDawn.Password == "3pQw5br24L7mML8w", "Expected remembered UO New Dawn password.");
+            Assert(rememberedNewDawn.Metadata.ContainsKey("refresh_token"), "Expected remembered refresh token preference.");
+            Assert(!rememberedNewDawn.Metadata.ContainsKey("jwt"), "JWT should not be restored from persisted state.");
+
+            await store.DeleteAsync("uo-new-dawn").ConfigureAwait(false);
+            Assert(!File.Exists(store.GetPath("uo-new-dawn")), "Expected remembered state deletion when remember is disabled.");
+        }
+        finally
+        {
+            Directory.Delete(appRoot, recursive: true);
+        }
+    }
+
+    private static async Task TestActiveShardStateRoundTripAsync()
+    {
+        string appRoot = CreateTempDirectory();
+        try
+        {
+            LauncherPaths paths = new()
+            {
+                DataRoot = appRoot,
+                StateFilePath = Path.Combine(appRoot, "launcher-state.json"),
+                ActiveShardStateFilePath = Path.Combine(appRoot, "active-shard-state.json"),
+                ShardStateDirectory = Path.Combine(appRoot, "shards"),
+                ShardManifestPath = Path.Combine(appRoot, "shards.json")
+            };
+
+            LauncherStateStore store = new(paths);
+            LauncherState state = new()
+            {
+                LicenseKey = "UOAIO-TEST-KEY",
+                SelectedShardId = "new-renaissance"
+            };
+
+            ActiveShardState active = ActiveShardStateFactory.Create(new ShardDefinition
+            {
+                Id = "new-renaissance",
+                Name = "New Renaissance",
+                Host = "play.newrenaissanceuo.com",
+                Account = "tester",
+                Password = "secret",
+                ServerIP = IPAddress.Parse("203.0.113.10"),
+                ServerPort = 2593,
+                Metadata = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+                {
+                    ["displayGroup"] = "recommended"
+                }
+            });
+
+            await store.SaveAsync(state).ConfigureAwait(false);
+            await store.SaveActiveShardStateAsync(active).ConfigureAwait(false);
+
+            LauncherState loadedState = await store.LoadAsync().ConfigureAwait(false);
+            ActiveShardState? loadedActive = await store.LoadActiveShardStateAsync().ConfigureAwait(false);
+            Assert(loadedState.SelectedShardId == state.SelectedShardId, "Selected shard id did not round-trip.");
+            Assert(loadedActive is not null, "Active state was not loaded.");
+            Assert(loadedActive!.SchemaVersion == 3, "Expected schema version 3.");
+            Assert(loadedActive.Runtime.Account == "tester", "Active state account mismatch.");
+            Assert(loadedActive.Runtime.ServerIP!.ToString() == "203.0.113.10", "Resolved IP did not round-trip.");
+        }
+        finally
+        {
+            Directory.Delete(appRoot, recursive: true);
+        }
+    }
+
+    private static async Task TestClientBootstrapRoundTripAsync()
+    {
+        string appRoot = CreateTempDirectory();
+        try
+        {
+            LauncherPaths paths = new()
+            {
+                DataRoot = appRoot,
+                StateFilePath = Path.Combine(appRoot, "launcher-state.json"),
+                ActiveShardStateFilePath = Path.Combine(appRoot, "active-shard-state.json"),
+                ShardStateDirectory = Path.Combine(appRoot, "shards"),
+                ShardManifestPath = Path.Combine(appRoot, "shards.json")
+            };
+
+            ShardDefinition shard = new()
+            {
+                Id = "uo-new-dawn",
+                Name = "UO New Dawn",
+                Description = "Bootstrap test shard",
+                Host = "proxy.uonewdawn.com",
+                Account = "tester",
+                Password = "secret",
+                UOClientVersion = new Version(1, 0, 0, 0),
+                ServerIP = IPAddress.Parse("203.0.113.15"),
+                ServerPort = 2593,
+                Metadata = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+                {
+                    ["displayGroup"] = "recommended",
+                    ["jwt"] = "jwt-123"
+                }
+            };
+
+            ClientBootstrapDefinition bootstrap = ClientBootstrapDefinitionFactory.Create(shard);
+            string pipeName = ClientBootstrapPipeTransport.CreatePipeName();
+            Task<string> payloadTask = ReadPipePayloadAsync(pipeName);
+            ClientBootstrapPipeTransport transport = new();
+            await transport.WriteAsync(pipeName, bootstrap).ConfigureAwait(false);
+            string payload = await payloadTask.ConfigureAwait(false);
+
+            ClientBootstrapDefinition roundTripped = ClientBootstrapSerializer.Deserialize(payload);
+            using JsonDocument document = JsonDocument.Parse(payload);
+            JsonElement shardElement = document.RootElement.GetProperty("shard");
+            Assert(document.RootElement.GetProperty("schemaVersion").GetInt32() == 2, "Expected bootstrap schema version 2.");
+            Assert(shardElement.GetProperty("id").GetString() == "uo-new-dawn", "Expected shard id to round-trip.");
+            Assert(shardElement.GetProperty("host").GetString() == "proxy.uonewdawn.com", "Expected shard host to round-trip.");
+            Assert(shardElement.GetProperty("serverIp").GetString() == "203.0.113.15", "Expected resolved IP to round-trip.");
+            Assert(shardElement.GetProperty("metadata").GetProperty("jwt").GetString() == "jwt-123", "Expected JWT metadata to round-trip.");
+            Assert(roundTripped.Shard.ServerIP!.ToString() == "203.0.113.15", "Expected shared bootstrap serializer to restore the resolved IP.");
+
+            string clientExePath = Path.Combine(appRoot, "Ultima.Client.Host.exe");
+            string dependencyPath = Path.Combine(appRoot, "Ultima.Client.dll");
+            await File.WriteAllTextAsync(clientExePath, "stub-host").ConfigureAwait(false);
+            await File.WriteAllTextAsync(dependencyPath, "stub-client").ConfigureAwait(false);
+
+            string sessionRoot = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                "UOAIO",
+                "ClientRuntime",
+                "sessions");
+            Directory.CreateDirectory(sessionRoot);
+            string expiredSessionPath = Path.Combine(sessionRoot, "expired-test-session");
+            Directory.CreateDirectory(expiredSessionPath);
+            Directory.SetLastWriteTimeUtc(expiredSessionPath, DateTime.UtcNow.AddHours(-30));
+
+            ClientProcessLauncher launcher = new();
+            ProcessStartInfo startInfo = launcher.CreateStartInfo(appRoot, pipeName);
+            string stagedExecutablePath = Path.GetFullPath(startInfo.FileName);
+            string stagedDirectory = Path.GetDirectoryName(stagedExecutablePath)!;
+            Assert(stagedExecutablePath != Path.GetFullPath(clientExePath), "Expected launcher to stage the client runtime outside the source output directory.");
+            Assert(File.Exists(stagedExecutablePath), "Expected staged client executable to exist.");
+            Assert(File.Exists(Path.Combine(stagedDirectory, "Ultima.Client.dll")), "Expected staged client dependency to be copied.");
+            Assert(startInfo.Arguments.Contains("--bootstrap-pipe", StringComparison.Ordinal), "Expected bootstrap pipe argument.");
+            Assert(startInfo.Arguments.Contains(pipeName, StringComparison.Ordinal), "Expected bootstrap pipe name in arguments.");
+            Assert(Path.GetFullPath(startInfo.WorkingDirectory!) == stagedDirectory, "Expected staged working directory.");
+            Assert(!Directory.Exists(expiredSessionPath), "Expected expired staged sessions to be pruned.");
+            Directory.Delete(stagedDirectory, recursive: true);
+        }
+        finally
+        {
+            Directory.Delete(appRoot, recursive: true);
+        }
+    }
+
+    private static async Task TestUoNewDawnAuthorizationServiceAsync()
+    {
+        string root = CreateTempDirectory();
+        try
+        {
+            ShardDefinition shard = new()
+            {
+                Id = "uo-new-dawn",
+                Name = "UO New Dawn",
+                Host = "proxy.uonewdawn.com",
+                ServerPort = 2593,
+                Metadata = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+                {
+                    ["payload_url_primary"] = "https://primary.example/payload.json",
+                    ["payload_url_fallback"] = "https://fallback.example/payload.json",
+                    ["oauth_callback_prefix"] = "http://localhost:4512/callback/"
+                }
+            };
+
+            string token = CreateJwt("123456789", "newdawn-user", DateTimeOffset.UtcNow.AddMinutes(30));
+            TestUoNewDawnAuthorizationService service = new(root, token);
+            UoNewDawnAuthorizationResult result = await service.AcquireAuthorizationAsync(shard).ConfigureAwait(false);
+            Assert(service.BrowserLaunchCount == 1, "Expected the browser auth flow to be launched once.");
+            Assert(result.IdentityHint == "newdawn-user", "Expected identity hint from the JWT.");
+            Assert(result.Metadata["jwt"] == token, "Expected JWT field to be captured.");
+            Assert(result.Metadata["discord_id"] == "123456789", "Expected discord_id to be captured.");
+            Assert(result.LoginHost == "proxy.uonewdawn.com", "Expected UO New Dawn login server host.");
+
+            UoNewDawnAuthorizationResult cachedResult = await service.AcquireAuthorizationAsync(shard).ConfigureAwait(false);
+            Assert(service.BrowserLaunchCount == 1, "Expected cached token to avoid re-opening the browser.");
+            Assert(cachedResult.IdentityHint == "newdawn-user", "Expected cached identity hint.");
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    private static Task TestUoNewDawnWorkflowStateMachineAsync()
+    {
+        UoNewDawnWorkflowState state = new();
+        Assert(state.CurrentStage == UoNewDawnWorkflowStage.Authorize, "Expected auth stage initially.");
+        Assert(!state.CanGoForward, "Should not be able to move forward before authorization.");
+
+        state.RestoreSelectedAccount("first-user-2");
+        state.RefreshToken = true;
+        state.ApplyAuthorization(new UoNewDawnAuthorizationResult
+        {
+            IdentityHint = "first-user",
+            LoginHost = "proxy.uonewdawn.com",
+            LoginPort = 2593,
+            Metadata = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["jwt"] = "jwt-1",
+                ["discord_user"] = "first-user"
+            }
+        });
+
+        Assert(state.CurrentStage == UoNewDawnWorkflowStage.SelectAccount, "Expected account stage after authorization.");
+        Assert(state.AccountOptions.Count == 3, "Expected synthetic account list.");
+        Assert(state.SelectedAccount == "first-user-2", "Expected restored account selection to survive into computed accounts.");
+
+        state.GoBack();
+        Assert(state.CurrentStage == UoNewDawnWorkflowStage.Authorize, "Expected back navigation to return to auth stage.");
+        Assert(state.CanGoForward, "Expected forward navigation after successful authorization.");
+        state.GoForward();
+        Assert(state.CurrentStage == UoNewDawnWorkflowStage.SelectAccount, "Expected forward navigation to restore account stage.");
+
+        state.ApplyAuthorization(new UoNewDawnAuthorizationResult
+        {
+            IdentityHint = "second-user",
+            LoginHost = "proxy.uonewdawn.com",
+            LoginPort = 2593,
+            Metadata = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["jwt"] = "jwt-2",
+                ["discord_user"] = "second-user"
+            }
+        });
+
+        Assert(state.SelectedAccount == "second-user-1", "Expected account selection to reset when upstream auth data changes.");
+        Dictionary<string, string> runtimeMetadata = state.BuildRuntimeMetadata("second-user-3");
+        Assert(runtimeMetadata["account"] == "second-user-3", "Expected selected account in runtime metadata.");
+        Assert(runtimeMetadata["username"] == "second-user-3", "Expected selected account to populate username metadata.");
+        Assert(runtimeMetadata["password"] == "3pQw5br24L7mML8w", "Expected the legacy New Dawn password to be present for client packet login.");
+        Assert(runtimeMetadata["jwt"] == "jwt-2", "Expected latest auth metadata in runtime metadata.");
+        return Task.CompletedTask;
+    }
+
+    private static async Task TestLicenseClientAsync()
+    {
+        TestHttpMessageHandler handler = new(async request =>
+        {
+            string body = await request.Content!.ReadAsStringAsync().ConfigureAwait(false);
+            if (body.Contains("bad-key", StringComparison.Ordinal))
+            {
+                return new HttpResponseMessage(HttpStatusCode.Forbidden)
+                {
+                    Content = new StringContent("{\"error\":\"forbidden\"}", Encoding.UTF8, "application/json")
+                };
+            }
+
+            return new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent(
+                    "{\"sessionToken\":\"jwt-123\",\"expiresAt\":\"2026-05-01T00:00:00Z\",\"licenseId\":\"lic-1\",\"status\":\"active\",\"policy\":{\"maxDevices\":3,\"heartbeatMinutes\":15,\"graceHours\":12,\"resetAllowance\":5,\"resetUsed\":1,\"offlineTokenAllow\":true}}",
+                    Encoding.UTF8,
+                    "application/json")
+            };
+        });
+
+        LauncherLicenseClient client = new(new HttpClient(handler));
+        LicenseSessionInfo session = await client.StartSessionAsync(new Uri("http://localhost:8080"), "good-key", "hwid", "machine").ConfigureAwait(false);
+        Assert(session.SessionToken == "jwt-123", "License client did not parse the session token.");
+        Assert(session.Policy.OfflineTokenAllowed, "License policy flag did not parse.");
+
+        bool threw = false;
+        try
+        {
+            await client.StartSessionAsync(new Uri("http://localhost:8080"), "bad-key", "hwid", "machine").ConfigureAwait(false);
+        }
+        catch (LicenseValidationException)
+        {
+            threw = true;
+        }
+
+        Assert(threw, "Expected invalid license flow to throw.");
+    }
+
+    private static async Task TestManifestVerificationAsync()
+    {
+        using RSA rsa = RSA.Create(2048);
+        string publicPem = rsa.ExportRSAPublicKeyPem();
+        ReleaseManifest manifest = new()
+        {
+            Channel = "stable",
+            Packages = new List<ReleasePackage>
+            {
+                new() { PackageId = "launcher", Version = "1.0.0", DownloadUrl = "launcher.zip", Sha256 = "ABC" }
+            }
+        };
+
+        byte[] bytes = ReleaseManifestSerializer.GetManifestBytes(manifest);
+        byte[] signature = rsa.SignData(bytes, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
+        SignedReleaseManifest envelope = new()
+        {
+            Manifest = manifest,
+            SignatureBase64 = Convert.ToBase64String(signature)
+        };
+
+        ReleaseManifestVerifier verifier = new();
+        verifier.Verify(envelope, publicPem);
+        await Task.CompletedTask;
+    }
+
+    private static async Task TestUpdateCoordinatorAsync()
+    {
+        string root = CreateTempDirectory();
+        try
+        {
+            using RSA rsa = RSA.Create(2048);
+            string publicPem = rsa.ExportRSAPublicKeyPem();
+            string publicKeyPath = Path.Combine(root, "release-public.pem");
+            await File.WriteAllTextAsync(publicKeyPath, publicPem).ConfigureAwait(false);
+
+            string packageV1Zip = CreateZipPackage(root, "client-v1.zip", "version.txt", "1.0.0");
+            string packageV2Zip = CreateZipPackage(root, "client-v2.zip", "version.txt", "2.0.0");
+
+            string manifestPath = Path.Combine(root, "manifest.json");
+            await WriteSignedManifestAsync(rsa, manifestPath, new ReleaseManifest
+            {
+                Channel = "stable",
+                Packages = new List<ReleasePackage>
+                {
+                    new()
+                    {
+                        PackageId = "client",
+                        Version = "1.0.0",
+                        DownloadUrl = new Uri(packageV1Zip).AbsoluteUri,
+                        Sha256 = ReleaseManifestSerializer.ComputeSha256(packageV1Zip),
+                        EntryPoint = "version.txt"
+                    }
+                }
+            }).ConfigureAwait(false);
+
+            BootstrapperSettings settings = new()
+            {
+                ManifestUri = new Uri(manifestPath).AbsoluteUri,
+                InstallRoot = Path.Combine(root, "install"),
+                PublicKeyPemPath = publicKeyPath,
+                Channel = "stable"
+            };
+
+            UpdateCoordinator coordinator = new(settings, new ReleaseManifestVerifier());
+            UpdateCheckResult firstCheck = await coordinator.CheckForUpdatesAsync().ConfigureAwait(false);
+            Assert(firstCheck.HasUpdates, "Expected first update check to find a package.");
+            StagedUpdatePlan firstPlan = await coordinator.StageUpdatesAsync(firstCheck).ConfigureAwait(false);
+            await coordinator.ApplyUpdatesAsync(firstPlan).ConfigureAwait(false);
+
+            string installedVersionPath = Path.Combine(settings.InstallRoot, "current", "client", "version.txt");
+            Assert(await File.ReadAllTextAsync(installedVersionPath).ConfigureAwait(false) == "1.0.0", "Expected version 1.0.0 after first apply.");
+
+            await WriteSignedManifestAsync(rsa, manifestPath, new ReleaseManifest
+            {
+                Channel = "stable",
+                Packages = new List<ReleasePackage>
+                {
+                    new()
+                    {
+                        PackageId = "client",
+                        Version = "2.0.0",
+                        DownloadUrl = new Uri(packageV2Zip).AbsoluteUri,
+                        Sha256 = ReleaseManifestSerializer.ComputeSha256(packageV2Zip),
+                        EntryPoint = "version.txt"
+                    }
+                }
+            }).ConfigureAwait(false);
+
+            UpdateCheckResult secondCheck = await coordinator.CheckForUpdatesAsync().ConfigureAwait(false);
+            StagedUpdatePlan secondPlan = await coordinator.StageUpdatesAsync(secondCheck).ConfigureAwait(false);
+            await coordinator.ApplyUpdatesAsync(secondPlan).ConfigureAwait(false);
+            Assert(await File.ReadAllTextAsync(installedVersionPath).ConfigureAwait(false) == "2.0.0", "Expected version 2.0.0 after second apply.");
+
+            await coordinator.RollbackAsync().ConfigureAwait(false);
+            Assert(await File.ReadAllTextAsync(installedVersionPath).ConfigureAwait(false) == "1.0.0", "Expected rollback to restore version 1.0.0.");
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    private static async Task WriteSignedManifestAsync(RSA rsa, string path, ReleaseManifest manifest)
+    {
+        byte[] bytes = ReleaseManifestSerializer.GetManifestBytes(manifest);
+        byte[] signature = rsa.SignData(bytes, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
+        SignedReleaseManifest envelope = new()
+        {
+            Manifest = manifest,
+            SignatureBase64 = Convert.ToBase64String(signature)
+        };
+
+        await File.WriteAllTextAsync(path, JsonSerializer.Serialize(envelope, JsonOptions)).ConfigureAwait(false);
+    }
+
+    private static string CreateZipPackage(string root, string zipName, string fileName, string contents)
+    {
+        string staging = Path.Combine(root, Path.GetFileNameWithoutExtension(zipName));
+        Directory.CreateDirectory(staging);
+        File.WriteAllText(Path.Combine(staging, fileName), contents);
+        string zipPath = Path.Combine(root, zipName);
+        if (File.Exists(zipPath))
+        {
+            File.Delete(zipPath);
+        }
+
+        System.IO.Compression.ZipFile.CreateFromDirectory(staging, zipPath);
+        return zipPath;
+    }
+
+    private static string CreateTempDirectory()
+    {
+        string path = Path.Combine(Path.GetTempPath(), "uoaio-tests", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(path);
+        return path;
+    }
+
+    private static string CreateJwt(string discordId, string discordUser, DateTimeOffset expiresAtUtc)
+    {
+        string header = Base64UrlEncode("{\"alg\":\"none\",\"typ\":\"JWT\"}");
+        string payload = Base64UrlEncode($"{{\"discord_id\":\"{discordId}\",\"discord_user\":\"{discordUser}\",\"exp\":{expiresAtUtc.ToUnixTimeSeconds()}}}");
+        return $"{header}.{payload}.signature";
+    }
+
+    private static string Base64UrlEncode(string value)
+    {
+        return Convert.ToBase64String(Encoding.UTF8.GetBytes(value)).TrimEnd('=').Replace('+', '-').Replace('/', '_');
+    }
+
+    private static async Task<string> ReadPipePayloadAsync(string pipeName)
+    {
+        using NamedPipeClientStream pipe = new(".", pipeName, PipeDirection.In, PipeOptions.Asynchronous);
+        await pipe.ConnectAsync().ConfigureAwait(false);
+        using StreamReader reader = new(pipe, Encoding.UTF8, leaveOpen: false);
+        return await reader.ReadToEndAsync().ConfigureAwait(false);
+    }
+
+    private static void Assert(bool condition, string message)
+    {
+        if (!condition)
+        {
+            throw new InvalidOperationException(message);
+        }
+    }
+}
+
+internal sealed class TestHttpMessageHandler : HttpMessageHandler
+{
+    private readonly Func<HttpRequestMessage, Task<HttpResponseMessage>> _handler;
+
+    public TestHttpMessageHandler(Func<HttpRequestMessage, Task<HttpResponseMessage>> handler)
+    {
+        _handler = handler;
+    }
+
+    protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+    {
+        return _handler(request);
+    }
+}
+
+internal sealed class TestUoNewDawnAuthorizationService : UoNewDawnAuthorizationService
+{
+    private readonly string _cacheRoot;
+    private readonly string _token;
+
+    public TestUoNewDawnAuthorizationService(string cacheRoot, string token)
+    {
+        _cacheRoot = cacheRoot;
+        _token = token;
+    }
+
+    public int BrowserLaunchCount { get; private set; }
+
+    protected override Task<UoNewDawnPayload> FetchPayloadWithFallbackAsync(ShardDefinition shard, CancellationToken cancellationToken)
+    {
+        return Task.FromResult(new UoNewDawnPayload
+        {
+            Config = new UoNewDawnLauncherConfig
+            {
+                ClientVersion = "1.0.0",
+                LoginUrl = "https://login.uonewdawn.com",
+                LoginServers = new List<UoNewDawnLoginServer>
+                {
+                    new() { Name = "Proxy", Host = "proxy.uonewdawn.com", Port = 2593 }
+                }
+            }
+        });
+    }
+
+    protected override Task LaunchBrowserAsync(string authUrl, CancellationToken cancellationToken)
+    {
+        BrowserLaunchCount++;
+        return Task.CompletedTask;
+    }
+
+    protected override Task<string> ListenForCallbackAsync(string callbackPrefix, string successRedirectUrl, CancellationToken cancellationToken)
+    {
+        return Task.FromResult(_token);
+    }
+
+    protected override string GetTokenCachePath()
+    {
+        Directory.CreateDirectory(_cacheRoot);
+        return Path.Combine(_cacheRoot, "uond-test-token.cache");
+    }
+}

@@ -1,0 +1,29 @@
+{
+  "schemaVersion": "1.0",
+  "publishedAtUtc": "2026-04-27T00:00:00Z",
+  "shards": [
+    {
+      "id": "new-renaissance",
+      "name": "New Renaissance",
+      "description": "Classic username/password shard profile. The launcher resolves the shard host and saves account metadata for the client login flow.",
+      "host": "play.newrenaissanceuo.com",
+      "port": 2593,
+      "metadata": {
+        "displayGroup": "recommended"
+      }
+    },
+    {
+      "id": "uo-new-dawn",
+      "name": "UO New Dawn",
+      "description": "Discord OAuth shard. The launcher opens the browser for approval, listens for the callback JWT, and saves the selected login server plus JWT metadata.",
+      "host": "proxy.uonewdawn.com",
+      "port": 2593,
+      "metadata": {
+        "displayGroup": "recommended",
+        "payload_url_primary": "https://newdawn.nyc3.digitaloceanspaces.com/client/payload.json",
+        "payload_url_fallback": "https://newdawn.nyc3.cdn.digitaloceanspaces.com/client/payload.json",
+        "oauth_callback_prefix": "http://localhost:4512/callback/"
+      }
+    }
+  ]
+}

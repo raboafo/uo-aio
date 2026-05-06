@@ -1,0 +1,6 @@
+{
+  "channel": "stable",
+  "manifestUri": "file:///C:/replace/me/release-manifest.json",
+  "installRoot": "C:/replace/me/UOAIO",
+  "publicKeyPemPath": "C:/replace/me/release-public.pem"
+}

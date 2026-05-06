@@ -1,0 +1,35 @@
+namespace UOAIO;
+
+public enum Layer : byte
+{
+	Invalid,
+	OneHanded,
+	TwoHanded,
+	Shoes,
+	Pants,
+	Shirt,
+	Helm,
+	Gloves,
+	Ring,
+	Unused_x9,
+	Neck,
+	Hair,
+	Waist,
+	InnerTorso,
+	Bracelet,
+	Unused_xF,
+	FacialHair,
+	MiddleTorso,
+	Earrings,
+	Arms,
+	Cloak,
+	Backpack,
+	OuterTorso,
+	OuterLegs,
+	InnerLegs,
+	Mount,
+	ShopResale,
+	ShopNoResale,
+	ShopSell,
+	Bank
+}

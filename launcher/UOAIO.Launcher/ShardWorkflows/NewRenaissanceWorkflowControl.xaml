@@ -1,0 +1,28 @@
+<UserControl x:Class="UOAIO.Launcher.ShardWorkflows.NewRenaissanceWorkflowControl"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <StackPanel>
+        <TextBlock FontSize="18"
+                   FontWeight="SemiBold"
+                   Text="New Renaissance" />
+        <TextBlock Margin="0,8,0,0"
+                   Foreground="#666666"
+                   TextWrapping="Wrap"
+                   Text="Classic account login. This shard stores account credentials in runtime metadata and resolves the shard host before saving the active state." />
+
+        <TextBlock Margin="0,16,0,4"
+                   Text="Username" />
+        <TextBox x:Name="UsernameTextBox" />
+
+        <TextBlock Margin="0,12,0,4"
+                   Text="Password" />
+        <PasswordBox x:Name="PasswordInput" />
+
+        <Button x:Name="PrepareButton"
+                Margin="0,20,0,0"
+                Padding="12,8"
+                HorizontalAlignment="Left"
+                Click="PrepareButton_Click"
+                Content="Prepare Active Shard State" />
+    </StackPanel>
+</UserControl>

@@ -1,0 +1,161 @@
+using System.Reflection;
+using Veritas;
+
+namespace UOAIO.Profiles;
+
+[Obfuscation(Feature = "renaming", ApplyToMembers = true)]
+public class NotorietyHues : PersistableObject
+{
+	public static readonly PersistableType TypeCode;
+
+	private int[] m_Hues;
+
+	public override PersistableType TypeID => NotorietyHues.TypeCode;
+
+	[Optionable("Innocent", "Notoriety Hues", Default = 89)]
+	[OptionHue]
+	public int Innocent
+	{
+		get
+		{
+			return this[Notoriety.Innocent];
+		}
+		set
+		{
+			this[Notoriety.Innocent] = value;
+		}
+	}
+
+	[Optionable("Ally", "Notoriety Hues", Default = 63)]
+	[OptionHue]
+	public int Ally
+	{
+		get
+		{
+			return this[Notoriety.Ally];
+		}
+		set
+		{
+			this[Notoriety.Ally] = value;
+		}
+	}
+
+	[Optionable("Attackable", "Notoriety Hues", Default = 1303)]
+	[OptionHue]
+	public int Attackable
+	{
+		get
+		{
+			return this[Notoriety.Attackable];
+		}
+		set
+		{
+			this[Notoriety.Attackable] = value;
+		}
+	}
+
+	[Optionable("Criminal", "Notoriety Hues", Default = 946)]
+	[OptionHue]
+	public int Criminal
+	{
+		get
+		{
+			return this[Notoriety.Criminal];
+		}
+		set
+		{
+			this[Notoriety.Criminal] = value;
+		}
+	}
+
+	[Optionable("Enemy", "Notoriety Hues", Default = 144)]
+	[OptionHue]
+	public int Enemy
+	{
+		get
+		{
+			return this[Notoriety.Enemy];
+		}
+		set
+		{
+			this[Notoriety.Enemy] = value;
+		}
+	}
+
+	[Optionable("Murderer", "Notoriety Hues", Default = 34)]
+	[OptionHue]
+	public int Murderer
+	{
+		get
+		{
+			return this[Notoriety.Murderer];
+		}
+		set
+		{
+			this[Notoriety.Murderer] = value;
+		}
+	}
+
+	[Optionable("Vendor", "Notoriety Hues", Default = 53)]
+	[OptionHue]
+	public int Vendor
+	{
+		get
+		{
+			return this[Notoriety.Vendor];
+		}
+		set
+		{
+			this[Notoriety.Vendor] = value;
+		}
+	}
+
+	public int this[Notoriety notoriety]
+	{
+		get
+		{
+			return this.m_Hues[(uint)(notoriety - 1)];
+		}
+		set
+		{
+			this.m_Hues[(uint)(notoriety - 1)] = value;
+		}
+	}
+
+	private static PersistableObject Construct()
+	{
+		return new NotorietyHues();
+	}
+
+	public NotorietyHues()
+	{
+		this.m_Hues = new int[7] { 89, 63, 1303, 946, 144, 34, 53 };
+	}
+
+	protected override void SerializeAttributes(PersistanceWriter op)
+	{
+		op.SetInt32("innocent", this.Innocent);
+		op.SetInt32("ally", this.Ally);
+		op.SetInt32("attackable", this.Attackable);
+		op.SetInt32("criminal", this.Criminal);
+		op.SetInt32("enemy", this.Enemy);
+		op.SetInt32("murderer", this.Murderer);
+		op.SetInt32("vendor", this.Vendor);
+	}
+
+	protected override void DeserializeAttributes(PersistanceReader ip)
+	{
+		this.Innocent = ip.GetInt32("innocent");
+		this.Ally = ip.GetInt32("ally");
+		this.Attackable = ip.GetInt32("attackable");
+		this.Criminal = ip.GetInt32("criminal");
+		this.Enemy = ip.GetInt32("enemy");
+		this.Murderer = ip.GetInt32("murderer");
+		this.Vendor = ip.GetInt32("vendor");
+	}
+
+	static NotorietyHues()
+	{
+		NotorietyHues.TypeCode = new PersistableType("notoHues", Construct);
+	}
+}
