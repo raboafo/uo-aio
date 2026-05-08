@@ -71,7 +71,7 @@ public static class ClientBootstrapSerializer
             Host = shard.Host,
             Account = shard.Account,
             Password = shard.Password,
-            UOClientVersion = shard.UOClientVersion?.ToString() ?? string.Empty,
+            ClientVersion = shard.ClientVersion?.ToString() ?? string.Empty,
             ServerIp = shard.ServerIP?.ToString() ?? string.Empty,
             Port = shard.ServerPort,
             Metadata = new Dictionary<string, string>(shard.Metadata ?? new Dictionary<string, string>(), StringComparer.OrdinalIgnoreCase)
@@ -101,10 +101,10 @@ public static class ClientBootstrapSerializer
             serverIp = IPAddress.Parse(envelope.ServerIp);
         }
 
-        Version? clientVersion = null;
-        if (!string.IsNullOrWhiteSpace(envelope.UOClientVersion))
+        Version clientVersion = null!;
+        if (!string.IsNullOrWhiteSpace(envelope.ClientVersion))
         {
-            clientVersion = Version.Parse(envelope.UOClientVersion);
+            clientVersion = Version.Parse(envelope.ClientVersion);
         }
 
         return new ShardDefinition
@@ -115,7 +115,7 @@ public static class ClientBootstrapSerializer
             Host = envelope.Host ?? string.Empty,
             Account = envelope.Account ?? string.Empty,
             Password = envelope.Password ?? string.Empty,
-            UOClientVersion = clientVersion,
+            ClientVersion = clientVersion,
             ServerIP = serverIp,
             ServerPort = envelope.Port,
             Metadata = envelope.Metadata ?? new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
@@ -200,8 +200,8 @@ internal sealed class ShardDefinitionEnvelope
     [DataMember(Name = "password")]
     public string Password { get; set; } = string.Empty;
 
-    [DataMember(Name = "uoClientVersion")]
-    public string UOClientVersion { get; set; } = string.Empty;
+    [DataMember(Name = "clientVersion")]
+    public string ClientVersion { get; set; } = string.Empty;
 
     [DataMember(Name = "serverIp")]
     public string ServerIp { get; set; } = string.Empty;

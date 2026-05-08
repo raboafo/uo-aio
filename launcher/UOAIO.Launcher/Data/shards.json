@@ -7,6 +7,7 @@
       "name": "New Renaissance",
       "description": "Classic username/password shard profile. The launcher resolves the shard host and saves account metadata for the client login flow.",
       "host": "play.newrenaissanceuo.com",
+      "clientVersion": "0.0.0.0",
       "port": 2593,
       "metadata": {
         "displayGroup": "recommended"
@@ -17,12 +18,24 @@
       "name": "UO New Dawn",
       "description": "Discord OAuth shard. The launcher opens the browser for approval, listens for the callback JWT, and saves the selected login server plus JWT metadata.",
       "host": "proxy.uonewdawn.com",
+      "clientVersion": "7.0.15.1",
       "port": 2593,
       "metadata": {
         "displayGroup": "recommended",
         "payload_url_primary": "https://newdawn.nyc3.digitaloceanspaces.com/client/payload.json",
         "payload_url_fallback": "https://newdawn.nyc3.cdn.digitaloceanspaces.com/client/payload.json",
         "oauth_callback_prefix": "http://localhost:4512/callback/"
+      }
+    },
+    {
+      "id": "tides-of-power",
+      "name": "Tides of Power",
+      "description": "Account/password shard profile. The launcher captures credentials and optional client asset path, while the client shard behavior remains a placeholder for manual implementation.",
+      "host": "login.uotides.com",
+      "clientVersion": "7.0.99.1",
+      "port": 2593,
+      "metadata": {
+        "displayGroup": "recommended"
       }
     }
   ]

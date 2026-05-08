@@ -3,11 +3,11 @@ using UOAIO.ShardRuntime;
 
 namespace UOAIO;
 
-internal sealed class NewRenaissanceShardHandler : IClientBootstrapHandler
+internal sealed class TidesOfPowerClientShardHandler : IClientBootstrapHandler
 {
     private ShardDefinition _shard;
 
-    public string ShardId => "new-renaissance";
+    public string ShardId => "tides-of-power";
 
     public void InitializeBootstrap(ClientBootstrapDefinition bootstrap)
     {
@@ -21,6 +21,7 @@ internal sealed class NewRenaissanceShardHandler : IClientBootstrapHandler
 
     public void SendFirstLogin()
     {
+        Network.Send(new PLoginSeed(0x83A9170A, _shard.ClientVersion));
         Network.Send(new PAccount(_shard.Account, _shard.Password));
     }
 }

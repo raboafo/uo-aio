@@ -261,23 +261,21 @@ public sealed class ShardDefinitionStateStore
 
     private static Dictionary<string, string> GetPersistedMetadata(ShardDefinition shard)
     {
-        if (string.Equals(shard.Id, NewRenaissanceShardId, StringComparison.OrdinalIgnoreCase))
+        Dictionary<string, string> metadata = new(StringComparer.OrdinalIgnoreCase);
+        if (shard.Metadata.TryGetValue(ShardMetadataKeys.ClientAssetPath, out string? assetPath) && !string.IsNullOrWhiteSpace(assetPath))
         {
-            return new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            metadata[ShardMetadataKeys.ClientAssetPath] = assetPath;
         }
 
         if (string.Equals(shard.Id, UoNewDawnShardId, StringComparison.OrdinalIgnoreCase))
         {
-            Dictionary<string, string> metadata = new(StringComparer.OrdinalIgnoreCase);
             if (shard.Metadata.TryGetValue("refresh_token", out string? refreshToken) && !string.IsNullOrWhiteSpace(refreshToken))
             {
                 metadata["refresh_token"] = refreshToken;
             }
-
-            return metadata;
         }
 
-        return new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        return metadata;
     }
 
     private static string ProtectPassword(string? password)
@@ -314,7 +312,7 @@ public sealed class ShardDefinitionStateStore
             Host = shard.Host,
             Account = shard.Account,
             Password = shard.Password,
-            UOClientVersion = shard.UOClientVersion is null ? null : new Version(shard.UOClientVersion.ToString()),
+            ClientVersion = new Version(shard.GetVersionString()),
             ServerIP = shard.ServerIP,
             ServerPort = shard.ServerPort,
             Metadata = new Dictionary<string, string>(shard.Metadata ?? new Dictionary<string, string>(), StringComparer.OrdinalIgnoreCase)
@@ -373,7 +371,9 @@ public sealed class ShardCatalogService
                 Name = shardElement.TryGetProperty("name", out JsonElement name) ? name.GetString() ?? string.Empty : string.Empty,
                 Description = shardElement.TryGetProperty("description", out JsonElement description) ? description.GetString() ?? string.Empty : string.Empty,
                 Host = shardElement.TryGetProperty("host", out JsonElement host) ? host.GetString() ?? string.Empty : string.Empty,
-                UOClientVersion = TryParseVersion(shardElement, "uoClientVersion"),
+                ClientVersion = ReadRequiredVersion(
+                    shardElement,
+                    shardElement.TryGetProperty("id", out JsonElement shardId) ? shardId.GetString() ?? string.Empty : string.Empty),
                 ServerPort = TryReadPort(shardElement),
                 Metadata = ReadMetadata(shardElement)
             });
@@ -382,13 +382,32 @@ public sealed class ShardCatalogService
         return catalog;
     }
 
-    private static Version? TryParseVersion(JsonElement shardElement, string propertyName)
+    private static Version ReadRequiredVersion(JsonElement shardElement, string shardId)
     {
-        return shardElement.TryGetProperty(propertyName, out JsonElement value) &&
-               value.ValueKind == JsonValueKind.String &&
-               Version.TryParse(value.GetString(), out Version? parsed)
-            ? parsed
-            : null;
+        JsonElement value;
+        if (!TryGetVersionProperty(shardElement, out value))
+        {
+            throw new InvalidOperationException($"Shard '{shardId}' is missing required 'clientVersion'.");
+        }
+
+        string? rawVersion = value.GetString();
+        if (string.IsNullOrWhiteSpace(rawVersion) || !Version.TryParse(rawVersion, out Version? parsed))
+        {
+            throw new InvalidOperationException($"Shard '{shardId}' has invalid 'clientVersion' value '{rawVersion}'.");
+        }
+
+        return parsed;
+    }
+
+    private static bool TryGetVersionProperty(JsonElement shardElement, out JsonElement value)
+    {
+        if (shardElement.TryGetProperty("clientVersion", out value) && value.ValueKind == JsonValueKind.String)
+        {
+            return true;
+        }
+
+        value = default;
+        return false;
     }
 
     private static Dictionary<string, string> ReadMetadata(JsonElement shardElement)
@@ -585,6 +604,11 @@ public static class ActiveShardStateFactory
             throw new InvalidOperationException("Shard port must be a positive integer.");
         }
 
+        if (shard.ClientVersion is null)
+        {
+            throw new InvalidOperationException("Shard client version is required.");
+        }
+
         return new ActiveShardState
         {
             SchemaVersion = 3,
@@ -604,7 +628,7 @@ public static class ActiveShardStateFactory
             Host = shard.Host,
             Account = shard.Account,
             Password = shard.Password,
-            UOClientVersion = shard.UOClientVersion is null ? null : new Version(shard.UOClientVersion.ToString()),
+            ClientVersion = new Version(shard.GetVersionString()),
             ServerIP = shard.ServerIP,
             ServerPort = shard.ServerPort,
             Metadata = new Dictionary<string, string>(shard.Metadata ?? new Dictionary<string, string>(), StringComparer.OrdinalIgnoreCase)

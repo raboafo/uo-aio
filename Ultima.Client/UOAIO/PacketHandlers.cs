@@ -372,15 +372,14 @@ public class PacketHandlers
 
 	private static void VersionRequest_Client(PacketReader pvSrc)
 	{
-		Engine.AddTextMessage("Server is requesting the client version.", Engine.GetFont(3), Hues.Load(34));
-		Network.Send(new PClientVersion(Engine.GetVersionString()));
+		Network.Send(new PClientVersion(Engine.Shard.GetVersionString()));
 	}
 
 	private static void VersionRequest_Assist(PacketReader pvSrc)
 	{
 		pvSrc.Trace();
 		Engine.AddTextMessage("Server is requesting the assist version.", Engine.GetFont(3), Hues.Load(34));
-		Network.Send(new PAssistVersion(pvSrc.ReadInt32(), Engine.GetVersionString()));
+		Network.Send(new PAssistVersion(pvSrc.ReadInt32(), Engine.Shard.GetVersionString()));
 	}
 
 	private static void CustomizedHouseContent(PacketReader pvSrc)
@@ -3970,7 +3969,7 @@ public class PacketHandlers
 		mobile.Update();
 		Network.Send(new PQuerySkills());
 		Engine.PingRequest(sendPing: false);
-		Network.Send(new PClientVersion(Engine.GetVersionString()));
+		Network.Send(new PClientVersion(Engine.Shard.GetVersionString()));
 		Network.Send(new PScreenSize());
 		Network.Send(new PSetLanguage());
 		Network.Send(new PUnknownLogin());
@@ -3981,7 +3980,7 @@ public class PacketHandlers
 	private static void ReceiveServerRelay(PacketReader pvSrc)
 	{
 		IPAddress addr = new IPAddress(pvSrc.ReadBytes(4));
-		int port = (int) pvSrc.ReadUInt16();
+		int port = pvSrc.ReadInt16();
 		uint authId = pvSrc.ReadUInt32();
 		GameCrypto gameCrypto = new GameCrypto(authId);
 

@@ -650,7 +650,8 @@ public class Engine
 
 	private static ClientShardHandlerRegistry ShardHandlers { get; } = new ClientShardHandlerRegistry(new IClientBootstrapHandler[]
 	{
-		new ClassicClientShardHandler(),
+		new NewRenaissanceShardHandler(),
+		new TidesOfPowerClientShardHandler(),
 		new NewDawnClientShardHandler()
 	});
 
@@ -1659,11 +1660,6 @@ public class Engine
 		return new Version(7, 0, 15, 1);
 	}
 
-	public static string GetVersionString()
-	{
-		return Engine.GetVersion().ToString();
-	}
-
 	public static void Setup()
 	{
 		Cursor.Gold = false;
@@ -2358,7 +2354,7 @@ public class Engine
 				Engine.Preload(Engine.m_MapLoadQueue.Dequeue());
 			}
 		}
-		Debug.Trace("Exiting while loop");
+
 		UOAIO.Profiles.Config.Current.Save();
 		Thread.Sleep(5);
 		if (Engine.m_Display != null && !Engine.m_Display.IsDisposed)

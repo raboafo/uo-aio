@@ -6,12 +6,12 @@ using UserControl = System.Windows.Controls.UserControl;
 
 namespace UOAIO.Launcher.ShardWorkflows;
 
-public partial class NewRenaissanceWorkflowControl : UserControl, IShardWorkflowControl
+public partial class TidesOfPowerWorkflowControl : UserControl, IShardWorkflowControl
 {
     private ShardWorkflowHostContext? _hostContext;
     private ShardDefinition? _shard;
 
-    public NewRenaissanceWorkflowControl()
+    public TidesOfPowerWorkflowControl()
     {
         InitializeComponent();
     }
@@ -21,7 +21,7 @@ public partial class NewRenaissanceWorkflowControl : UserControl, IShardWorkflow
         _hostContext = hostContext;
         _shard = hostContext.ShardStateStore.ApplyRememberedState(shard);
 
-        UsernameTextBox.Text = _shard.Account;
+        AccountTextBox.Text = _shard.Account;
         PasswordInput.Password = _shard.Password;
         AssetDirectoryTextBox.Text = ShardWorkflowAssetPathSupport.GetAssetPath(_shard);
     }
@@ -33,7 +33,7 @@ public partial class NewRenaissanceWorkflowControl : UserControl, IShardWorkflow
             return;
         }
 
-        string username = UsernameTextBox.Text.Trim();
+        string account = AccountTextBox.Text.Trim();
         string password = PasswordInput.Password;
         if (!ShardWorkflowAssetPathSupport.TryNormalizeAssetPath(AssetDirectoryTextBox.Text, out string assetPath, out string? assetPathError))
         {
@@ -42,9 +42,9 @@ public partial class NewRenaissanceWorkflowControl : UserControl, IShardWorkflow
         }
 
         List<string> errors = new();
-        if (string.IsNullOrWhiteSpace(username))
+        if (string.IsNullOrWhiteSpace(account))
         {
-            errors.Add("Username is required.");
+            errors.Add("Account is required.");
         }
 
         if (string.IsNullOrWhiteSpace(password))
@@ -68,7 +68,7 @@ public partial class NewRenaissanceWorkflowControl : UserControl, IShardWorkflow
                 Name = _shard.Name,
                 Description = _shard.Description,
                 Host = _shard.Host,
-                Account = username,
+                Account = account,
                 Password = password,
                 ClientVersion = _shard.ClientVersion,
                 ServerIP = resolvedIpAddress,

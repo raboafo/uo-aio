@@ -6,6 +6,7 @@ using System.Windows.Media;
 using UOAIO.Launcher.Core;
 using UOAIO.Launcher.ShardWorkflows;
 using UOAIO.ShardRuntime;
+using Brushes = System.Windows.Media.Brushes;
 
 namespace UOAIO.Launcher;
 
@@ -25,7 +26,8 @@ public partial class MainWindow : Window
     private readonly ShardWorkflowRegistry<Func<IShardWorkflowControl>> _workflowRegistry = new(new[]
     {
         new ShardWorkflowRegistration<Func<IShardWorkflowControl>>("new-renaissance", static () => new NewRenaissanceWorkflowControl()),
-        new ShardWorkflowRegistration<Func<IShardWorkflowControl>>("uo-new-dawn", static () => new UoNewDawnWorkflowControl())
+        new ShardWorkflowRegistration<Func<IShardWorkflowControl>>("uo-new-dawn", static () => new UoNewDawnWorkflowControl()),
+        new ShardWorkflowRegistration<Func<IShardWorkflowControl>>("tides-of-power", static () => new TidesOfPowerWorkflowControl())
     });
 
     private bool _isInitializing;
@@ -223,7 +225,7 @@ public partial class MainWindow : Window
                 Host = bootstrap.Shard.Host,
                 Account = Mask(bootstrap.Shard.Account),
                 Password = Mask(bootstrap.Shard.Password),
-                UOClientVersion = bootstrap.Shard.UOClientVersion,
+                ClientVersion = bootstrap.Shard.ClientVersion,
                 ServerIP = bootstrap.Shard.ServerIP,
                 ServerPort = bootstrap.Shard.ServerPort,
                 Metadata = MaskMetadata(bootstrap.Shard.Metadata)

@@ -3,7 +3,6 @@ using System.Net;
 using System.Security.Cryptography;
 using System.Text;
 using UOAIO.ShardRuntime;
-using Veritas;
 
 namespace UOAIO;
 
@@ -27,13 +26,9 @@ internal sealed class NewDawnClientShardHandler : IClientBootstrapHandler
         PacketHandlers.Register(0xC9, 3, NewDawnClientVersion);
     }
 
-    public void ConfigurePacketHandlers(PacketHandlerRegistry registry, ClientBootstrapDefinition bootstrap)
-    {
-    }
-
     public void SendFirstLogin()
     {
-        Network.Send(new PLoginSeed(0x839D1E0A, _shard.UOClientVersion));
+        Network.Send(new PLoginSeed(0x839D1E0A, _shard.ClientVersion));
         Network.Send(new PAccount(_shard.Account,_shard.Password, _token));
     }
 
@@ -91,7 +86,6 @@ internal sealed class NewDawnClientShardHandler : IClientBootstrapHandler
 
     private void ReceiveServerRelay(PacketReader pvSrc)
     {
-        Debug.Trace("Handling new dawn server relay");
         pvSrc.ReadBytes(4);
         pvSrc.ReadUInt16();
         uint authId = pvSrc.ReadUInt32();

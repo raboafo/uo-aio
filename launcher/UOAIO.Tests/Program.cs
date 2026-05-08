@@ -69,6 +69,20 @@ internal static class Program
                         Name = "New Renaissance",
                         Description = "Test shard",
                         Host = "play.newrenaissanceuo.com",
+                        ClientVersion = new Version(0, 0, 0, 0),
+                        ServerPort = 2593,
+                        Metadata = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+                        {
+                            ["displayGroup"] = "recommended"
+                        }
+                    },
+                    new()
+                    {
+                        Id = "tides-of-power",
+                        Name = "Tides of Power",
+                        Description = "Test shard",
+                        Host = "login.uotides.com",
+                        ClientVersion = new Version(0, 0, 0, 0),
                         ServerPort = 2593,
                         Metadata = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
                         {
@@ -80,17 +94,20 @@ internal static class Program
 
             ShardCatalogService catalogService = new();
             ShardCatalog catalog = await catalogService.LoadAsync(manifestPath).ConfigureAwait(false);
-            Assert(catalog.Shards.Count == 1, "Expected one shard.");
+            Assert(catalog.Shards.Count == 2, "Expected two shards.");
             Assert(!catalog.Shards[0].Metadata.ContainsKey("adapterId"), "Manifest should not depend on adapter ids.");
+            Assert(catalog.Shards[0].ClientVersion?.ToString() == "0.0.0.0", "Expected shard client version to round-trip from the manifest.");
 
             ShardWorkflowRegistry<string> workflows = new(new[]
             {
                 new ShardWorkflowRegistration<string>("new-renaissance", "new-ren-flow"),
-                new ShardWorkflowRegistration<string>("uo-new-dawn", "uond-flow")
+                new ShardWorkflowRegistration<string>("uo-new-dawn", "uond-flow"),
+                new ShardWorkflowRegistration<string>("tides-of-power", "top-flow")
             });
 
             string workflowId = workflows.Resolve(catalog.Shards[0].Id);
             Assert(workflowId == "new-ren-flow", "Expected shard workflow registry to resolve by shard id.");
+            Assert(workflows.Resolve("tides-of-power") == "top-flow", "Expected Tides of Power workflow registry entry.");
 
             ShardDefinition runtimeShard = new()
             {
@@ -100,6 +117,7 @@ internal static class Program
                 Host = catalog.Shards[0].Host,
                 Account = "tester",
                 Password = "secret",
+                ClientVersion = catalog.Shards[0].ClientVersion,
                 ServerIP = IPAddress.Parse("203.0.113.10"),
                 ServerPort = 2593,
                 Metadata = new Dictionary<string, string>(catalog.Shards[0].Metadata, StringComparer.OrdinalIgnoreCase)
@@ -143,7 +161,8 @@ internal static class Program
                 ServerPort = 2593,
                 Metadata = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
                 {
-                    ["displayGroup"] = "recommended"
+                    ["displayGroup"] = "recommended",
+                    [ShardMetadataKeys.ClientAssetPath] = @"C:\uo-assets"
                 }
             };
 
@@ -151,6 +170,7 @@ internal static class Program
             string newRenaissanceJson = await File.ReadAllTextAsync(store.GetPath("new-renaissance")).ConfigureAwait(false);
             Assert(!newRenaissanceJson.Contains("secret-password", StringComparison.Ordinal), "Plaintext passwords must not be persisted.");
             Assert(!newRenaissanceJson.Contains("displayGroup", StringComparison.Ordinal), "New Renaissance should not persist extra metadata.");
+            Assert(newRenaissanceJson.Contains("client_asset_path", StringComparison.Ordinal), "Client asset path should persist when provided.");
 
             ShardDefinition rememberedNewRenaissance = store.ApplyRememberedState(new ShardDefinition
             {
@@ -166,6 +186,7 @@ internal static class Program
 
             Assert(rememberedNewRenaissance.Account == "tester", "Expected remembered account to round-trip.");
             Assert(rememberedNewRenaissance.Password == "secret-password", "Expected remembered password to round-trip.");
+            Assert(rememberedNewRenaissance.Metadata[ShardMetadataKeys.ClientAssetPath] == @"C:\uo-assets", "Expected client asset path to round-trip.");
 
             ShardDefinition newDawn = new()
             {
@@ -180,7 +201,8 @@ internal static class Program
                     ["refresh_token"] = true.ToString(),
                     ["jwt"] = "jwt-123",
                     ["discord_id"] = "123",
-                    ["client_version"] = "1.0.0"
+                    ["client_version"] = "1.0.0",
+                    [ShardMetadataKeys.ClientAssetPath] = @"D:\uond-assets"
                 }
             };
 
@@ -188,6 +210,7 @@ internal static class Program
             string newDawnJson = await File.ReadAllTextAsync(store.GetPath("uo-new-dawn")).ConfigureAwait(false);
             Assert(!newDawnJson.Contains("3pQw5br24L7mML8w", StringComparison.Ordinal), "UO New Dawn password must be encrypted at rest.");
             Assert(newDawnJson.Contains("refresh_token", StringComparison.Ordinal), "Expected UO New Dawn refresh token preference to persist.");
+            Assert(newDawnJson.Contains("client_asset_path", StringComparison.Ordinal), "Expected shared client asset path persistence.");
             Assert(!newDawnJson.Contains("jwt-123", StringComparison.Ordinal), "JWT metadata must not be persisted.");
 
             ShardDefinition rememberedNewDawn = store.ApplyRememberedState(new ShardDefinition
@@ -205,7 +228,26 @@ internal static class Program
             Assert(rememberedNewDawn.Account == "newdawn-user-1", "Expected remembered UO New Dawn account.");
             Assert(rememberedNewDawn.Password == "3pQw5br24L7mML8w", "Expected remembered UO New Dawn password.");
             Assert(rememberedNewDawn.Metadata.ContainsKey("refresh_token"), "Expected remembered refresh token preference.");
+            Assert(rememberedNewDawn.Metadata[ShardMetadataKeys.ClientAssetPath] == @"D:\uond-assets", "Expected remembered shared client asset path.");
             Assert(!rememberedNewDawn.Metadata.ContainsKey("jwt"), "JWT should not be restored from persisted state.");
+
+            ShardDefinition tidesWithBlankAssetPath = new()
+            {
+                Id = "tides-of-power",
+                Name = "Tides of Power",
+                Host = "login.uotides.com",
+                Account = "placeholder",
+                Password = "placeholder-password",
+                ServerPort = 2593,
+                Metadata = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+                {
+                    [ShardMetadataKeys.ClientAssetPath] = string.Empty
+                }
+            };
+
+            await store.SaveAsync(tidesWithBlankAssetPath).ConfigureAwait(false);
+            string tidesJson = await File.ReadAllTextAsync(store.GetPath("tides-of-power")).ConfigureAwait(false);
+            Assert(!tidesJson.Contains("client_asset_path", StringComparison.Ordinal), "Blank asset paths should not be persisted.");
 
             await store.DeleteAsync("uo-new-dawn").ConfigureAwait(false);
             Assert(!File.Exists(store.GetPath("uo-new-dawn")), "Expected remembered state deletion when remember is disabled.");
@@ -244,6 +286,7 @@ internal static class Program
                 Host = "play.newrenaissanceuo.com",
                 Account = "tester",
                 Password = "secret",
+                ClientVersion = new Version(0, 0, 0, 0),
                 ServerIP = IPAddress.Parse("203.0.113.10"),
                 ServerPort = 2593,
                 Metadata = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
@@ -291,13 +334,14 @@ internal static class Program
                 Host = "proxy.uonewdawn.com",
                 Account = "tester",
                 Password = "secret",
-                UOClientVersion = new Version(1, 0, 0, 0),
+                ClientVersion = new Version(1, 0, 0, 0),
                 ServerIP = IPAddress.Parse("203.0.113.15"),
                 ServerPort = 2593,
                 Metadata = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
                 {
                     ["displayGroup"] = "recommended",
-                    ["jwt"] = "jwt-123"
+                    ["jwt"] = "jwt-123",
+                    [ShardMetadataKeys.ClientAssetPath] = @"C:\uond-assets"
                 }
             };
 
@@ -316,7 +360,9 @@ internal static class Program
             Assert(shardElement.GetProperty("host").GetString() == "proxy.uonewdawn.com", "Expected shard host to round-trip.");
             Assert(shardElement.GetProperty("serverIp").GetString() == "203.0.113.15", "Expected resolved IP to round-trip.");
             Assert(shardElement.GetProperty("metadata").GetProperty("jwt").GetString() == "jwt-123", "Expected JWT metadata to round-trip.");
+            Assert(shardElement.GetProperty("metadata").GetProperty("client_asset_path").GetString() == @"C:\uond-assets", "Expected client asset path metadata to round-trip.");
             Assert(roundTripped.Shard.ServerIP!.ToString() == "203.0.113.15", "Expected shared bootstrap serializer to restore the resolved IP.");
+            Assert(roundTripped.Shard.Metadata[ShardMetadataKeys.ClientAssetPath] == @"C:\uond-assets", "Expected client asset path metadata to deserialize.");
 
             string clientExePath = Path.Combine(appRoot, "Ultima.Client.Host.exe");
             string dependencyPath = Path.Combine(appRoot, "Ultima.Client.dll");

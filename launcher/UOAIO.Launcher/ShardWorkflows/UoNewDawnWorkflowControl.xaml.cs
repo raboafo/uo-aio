@@ -3,6 +3,8 @@ using System.Windows.Controls;
 using System.Windows.Media;
 using UOAIO.Launcher.Core;
 using UOAIO.ShardRuntime;
+using Brushes = System.Windows.Media.Brushes;
+using UserControl = System.Windows.Controls.UserControl;
 
 namespace UOAIO.Launcher.ShardWorkflows;
 
@@ -29,6 +31,7 @@ public partial class UoNewDawnWorkflowControl : UserControl, IShardWorkflowContr
                                       parsedRefreshToken;
         RefreshTokenCheckBox.IsChecked = _workflowState.RefreshToken;
         _workflowState.RestoreSelectedAccount(_shard.Account);
+        AssetDirectoryTextBox.Text = ShardWorkflowAssetPathSupport.GetAssetPath(_shard);
 
         ShowAuthorizationStatus("Discord authorization is required before continuing.", isError: false);
         ShowAccountStatus("Choose the account that should be handed off to the client.", isError: false);
@@ -88,6 +91,13 @@ public partial class UoNewDawnWorkflowControl : UserControl, IShardWorkflowContr
         PlayButton.IsEnabled = false;
         try
         {
+            if (!ShardWorkflowAssetPathSupport.TryNormalizeAssetPath(AssetDirectoryTextBox.Text, out string assetPath, out string? assetPathError))
+            {
+                ShowAccountStatus(assetPathError ?? "Asset directory is invalid.", isError: true);
+                _hostContext.ShowStatus(assetPathError ?? "Asset directory is invalid.", true);
+                return;
+            }
+
             Dictionary<string, string> metadata = _workflowState.BuildRuntimeMetadata(AccountComboBox.SelectedItem as string ?? string.Empty);
             metadata["refresh_token"] = _workflowState.RefreshToken.ToString();
             string loginHost = _workflowState.Authorization.LoginHost;
@@ -102,7 +112,7 @@ public partial class UoNewDawnWorkflowControl : UserControl, IShardWorkflowContr
                 Host = loginHost,
                 Account = metadata["account"],
                 Password = metadata["password"],
-                UOClientVersion = new Version(7, 0, 15, 1),
+                ClientVersion = _shard.ClientVersion,
                 ServerIP = resolvedIpAddress,
                 ServerPort = loginPort,
                 Metadata = new Dictionary<string, string>(_shard.Metadata, StringComparer.OrdinalIgnoreCase)
@@ -111,6 +121,7 @@ public partial class UoNewDawnWorkflowControl : UserControl, IShardWorkflowContr
             {
                 runtimeShard.Metadata[key] = value;
             }
+            ShardWorkflowAssetPathSupport.ApplyAssetPathMetadata(runtimeShard.Metadata, assetPath);
 
             ClientBootstrapDefinition bootstrap = ClientBootstrapDefinitionFactory.Create(runtimeShard);
             ClientProcessLauncher launcher = new();
@@ -196,6 +207,20 @@ public partial class UoNewDawnWorkflowControl : UserControl, IShardWorkflowContr
     {
         AccountStageStatusTextBlock.Text = message;
         AccountStageStatusTextBlock.Foreground = isError ? Brushes.Firebrick : Brushes.DarkGreen;
+    }
+
+    private void BrowseAssetDirectoryButton_Click(object sender, RoutedEventArgs e)
+    {
+        string? selectedPath = ShardWorkflowAssetPathSupport.BrowseForAssetPath(AssetDirectoryTextBox.Text);
+        if (!string.IsNullOrWhiteSpace(selectedPath))
+        {
+            AssetDirectoryTextBox.Text = selectedPath;
+        }
+    }
+
+    private void ClearAssetDirectoryButton_Click(object sender, RoutedEventArgs e)
+    {
+        AssetDirectoryTextBox.Text = string.Empty;
     }
 
     private static Version? ResolveClientVersion(IReadOnlyDictionary<string, string> metadata, Version? fallback)

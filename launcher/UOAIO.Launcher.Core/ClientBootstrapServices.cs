@@ -32,6 +32,11 @@ public static class ClientBootstrapDefinitionFactory
             throw new InvalidOperationException("Shard port must be a positive integer.");
         }
 
+        if (shard.ClientVersion is null)
+        {
+            throw new InvalidOperationException("Shard client version is required.");
+        }
+
         return new ClientBootstrapDefinition
         {
             SchemaVersion = 2,
@@ -50,7 +55,7 @@ public static class ClientBootstrapDefinitionFactory
             Host = shard.Host,
             Account = shard.Account,
             Password = shard.Password,
-            UOClientVersion = shard.UOClientVersion is null ? null : new Version(shard.UOClientVersion.ToString()),
+            ClientVersion = new Version(shard.GetVersionString()),
             ServerIP = shard.ServerIP,
             ServerPort = shard.ServerPort,
             Metadata = new Dictionary<string, string>(shard.Metadata ?? new Dictionary<string, string>(), StringComparer.OrdinalIgnoreCase)

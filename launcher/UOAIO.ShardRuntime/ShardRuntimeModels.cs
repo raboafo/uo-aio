@@ -29,7 +29,7 @@ public sealed class ShardDefinition
 
     public string Password { get; set; } = string.Empty;
 
-    public Version? UOClientVersion { get; set; }
+    public Version ClientVersion { get; set; } = null!;
 
     public IPAddress? ServerIP { get; set; }
 
@@ -40,6 +40,11 @@ public sealed class ShardDefinition
     public string GetMetadata(string key)
     {
         return GetMetadata(key, true);
+    }
+
+    public string GetVersionString()
+    {
+        return ClientVersion.ToString();
     }
 
     public string GetMetadata(string key, bool required)
