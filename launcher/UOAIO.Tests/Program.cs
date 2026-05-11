@@ -375,22 +375,22 @@ internal static class Program
                 "ClientRuntime",
                 "sessions");
             Directory.CreateDirectory(sessionRoot);
-            string expiredSessionPath = Path.Combine(sessionRoot, "expired-test-session");
+            string expiredSessionPath = Path.Combine(sessionRoot, "expired-test-session-" + Guid.NewGuid().ToString("N"));
             Directory.CreateDirectory(expiredSessionPath);
             Directory.SetLastWriteTimeUtc(expiredSessionPath, DateTime.UtcNow.AddHours(-30));
 
             ClientProcessLauncher launcher = new();
             ProcessStartInfo startInfo = launcher.CreateStartInfo(appRoot, pipeName);
-            string stagedExecutablePath = Path.GetFullPath(startInfo.FileName);
-            string stagedDirectory = Path.GetDirectoryName(stagedExecutablePath)!;
-            Assert(stagedExecutablePath != Path.GetFullPath(clientExePath), "Expected launcher to stage the client runtime outside the source output directory.");
-            Assert(File.Exists(stagedExecutablePath), "Expected staged client executable to exist.");
-            Assert(File.Exists(Path.Combine(stagedDirectory, "Ultima.Client.dll")), "Expected staged client dependency to be copied.");
+            string resolvedExecutablePath = Path.GetFullPath(startInfo.FileName);
+            string runtimeDataRoot = ExtractCommandArgument(startInfo.Arguments, "--runtime-data-root");
+            Assert(resolvedExecutablePath == Path.GetFullPath(clientExePath), "Expected launcher to execute the client host in place.");
+            Assert(Directory.Exists(runtimeDataRoot), "Expected runtime session data directory to be created.");
             Assert(startInfo.Arguments.Contains("--bootstrap-pipe", StringComparison.Ordinal), "Expected bootstrap pipe argument.");
             Assert(startInfo.Arguments.Contains(pipeName, StringComparison.Ordinal), "Expected bootstrap pipe name in arguments.");
-            Assert(Path.GetFullPath(startInfo.WorkingDirectory!) == stagedDirectory, "Expected staged working directory.");
+            Assert(startInfo.Arguments.Contains("--runtime-data-root", StringComparison.Ordinal), "Expected runtime data root argument.");
+            Assert(Path.GetFullPath(startInfo.WorkingDirectory!) == Path.GetFullPath(appRoot), "Expected app-root working directory.");
             Assert(!Directory.Exists(expiredSessionPath), "Expected expired staged sessions to be pruned.");
-            Directory.Delete(stagedDirectory, recursive: true);
+            Directory.Delete(runtimeDataRoot, recursive: true);
         }
         finally
         {
@@ -663,6 +663,25 @@ internal static class Program
         string path = Path.Combine(Path.GetTempPath(), "uoaio-tests", Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(path);
         return path;
+    }
+
+    private static string ExtractCommandArgument(string arguments, string optionName)
+    {
+        string marker = optionName + " \"";
+        int start = arguments.IndexOf(marker, StringComparison.Ordinal);
+        if (start < 0)
+        {
+            throw new InvalidOperationException($"Unable to find argument '{optionName}' in '{arguments}'.");
+        }
+
+        start += marker.Length;
+        int end = arguments.IndexOf('"', start);
+        if (end < 0)
+        {
+            throw new InvalidOperationException($"Unable to parse quoted value for argument '{optionName}'.");
+        }
+
+        return arguments.Substring(start, end - start);
     }
 
     private static string CreateJwt(string discordId, string discordUser, DateTimeOffset expiresAtUtc)

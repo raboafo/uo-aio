@@ -116,7 +116,7 @@ public class PacketReader
 		{
 			Engine.AddTextMessage(string.Format("Tracing packet 0x{0:X2} '{1}' of length {2} ( 0x{2:X} ). (Prior: 0x{3:X2}, 0x{4:X2}, 0x{5:X2})", this.m_Command, this.m_Name, this.m_Count, NetworkContext.prior1, NetworkContext.prior2, NetworkContext.prior3));
 		}
-		StreamWriter streamWriter = new StreamWriter("PacketTrace.log", append: true);
+		StreamWriter streamWriter = ClientRuntimeEnvironment.CreateRuntimeTextWriter("data/ultima/logs/PacketTrace.log", append: true);
 		if (this.m_Count < 16)
 		{
 			streamWriter.WriteLine("Packet Server->Client '{0}' ( {1} bytes )", this.m_ReturnName, this.m_Count);

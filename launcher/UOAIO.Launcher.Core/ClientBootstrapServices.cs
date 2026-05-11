@@ -78,10 +78,11 @@ public sealed class ClientProcessLauncher
             throw new ArgumentException("A bootstrap pipe name is required.", nameof(bootstrapPipeName));
         }
 
-        string executablePath = StageClientRuntime(appBaseDirectory);
+        string executablePath = ResolveClientExecutablePath(appBaseDirectory);
+        string runtimeDataDirectory = CreateRuntimeDataSessionDirectory();
         return new ProcessStartInfo(executablePath)
         {
-            Arguments = $"--bootstrap-pipe \"{bootstrapPipeName}\"",
+            Arguments = $"--bootstrap-pipe \"{bootstrapPipeName}\" --runtime-data-root \"{runtimeDataDirectory}\"",
             UseShellExecute = false,
             WorkingDirectory = Path.GetDirectoryName(executablePath) ?? appBaseDirectory
         };
@@ -151,29 +152,19 @@ public sealed class ClientProcessLauncher
         throw new FileNotFoundException("Unable to locate Ultima.Client.Host.exe from the launcher directory.");
     }
 
-    public string StageClientRuntime(string appBaseDirectory)
+    public string CreateRuntimeDataSessionDirectory()
     {
-        string sourceExecutablePath = ResolveClientExecutablePath(appBaseDirectory);
-        string sourceDirectory = Path.GetDirectoryName(sourceExecutablePath)
-            ?? throw new InvalidOperationException("Resolved client executable path did not include a directory.");
         string sessionRoot = GetSessionRootPath();
 
         Directory.CreateDirectory(sessionRoot);
         PruneExpiredSessions(sessionRoot, DateTimeOffset.UtcNow);
 
-        string sessionDirectory = Path.Combine(
+        string runtimeDataDirectory = Path.Combine(
             sessionRoot,
             $"{DateTimeOffset.UtcNow:yyyyMMdd-HHmmssfff}-{Guid.NewGuid():N}");
 
-        CopyDirectory(sourceDirectory, sessionDirectory);
-
-        string stagedExecutablePath = Path.Combine(sessionDirectory, Path.GetFileName(sourceExecutablePath));
-        if (!File.Exists(stagedExecutablePath))
-        {
-            throw new FileNotFoundException("The staged client runtime is missing Ultima.Client.Host.exe.", stagedExecutablePath);
-        }
-
-        return stagedExecutablePath;
+        Directory.CreateDirectory(runtimeDataDirectory);
+        return runtimeDataDirectory;
     }
 
     private static string GetSessionRootPath()
@@ -181,7 +172,7 @@ public sealed class ClientProcessLauncher
         string localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
         if (string.IsNullOrWhiteSpace(localAppData))
         {
-            throw new InvalidOperationException("Unable to determine the LocalApplicationData folder for client runtime staging.");
+            throw new InvalidOperationException("Unable to determine the LocalApplicationData folder for client runtime session data.");
         }
 
         return Path.Combine(localAppData, "UOAIO", "ClientRuntime", "sessions");
@@ -208,27 +199,6 @@ public sealed class ClientProcessLauncher
             catch (UnauthorizedAccessException)
             {
             }
-        }
-    }
-
-    private static void CopyDirectory(string sourceDirectory, string destinationDirectory)
-    {
-        DirectoryInfo source = new(sourceDirectory);
-        if (!source.Exists)
-        {
-            throw new DirectoryNotFoundException($"Unable to locate the client runtime directory '{sourceDirectory}'.");
-        }
-
-        Directory.CreateDirectory(destinationDirectory);
-
-        foreach (DirectoryInfo childDirectory in source.EnumerateDirectories())
-        {
-            CopyDirectory(childDirectory.FullName, Path.Combine(destinationDirectory, childDirectory.Name));
-        }
-
-        foreach (FileInfo file in source.EnumerateFiles())
-        {
-            file.CopyTo(Path.Combine(destinationDirectory, file.Name), overwrite: false);
         }
     }
 

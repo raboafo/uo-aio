@@ -44,7 +44,7 @@ public class Network
 			{
 				if (Network._packetLogger == null)
 				{
-					Network._packetLogger = new PacketLogger(new StreamWriter("PacketTrace_all.log", append: true));
+					Network._packetLogger = new PacketLogger(ClientRuntimeEnvironment.CreateRuntimeTextWriter("data/ultima/logs/PacketTrace_all.log", append: true));
 				}
 				Network._networkContext.RegisterDiagnostic(Network._packetLogger);
 			}

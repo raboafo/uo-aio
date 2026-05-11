@@ -164,8 +164,8 @@ public class Debug
 	{
 		if (Debug.m_Logger == null)
 		{
-			Engine.WantDirectory("data/ultima/logs/");
-			Debug.m_Logger = new StreamWriter(Engine.FileManager.CreateUnique("data/ultima/logs/playuo", ".log"));
+			Engine.WantRuntimeDirectory("data/ultima/logs/");
+			Debug.m_Logger = new StreamWriter(Engine.FileManager.CreateUniqueRuntime("data/ultima/logs/playuo", ".log"));
 			Debug.m_Logger.AutoFlush = true;
 		}
 	}

@@ -1,4 +1,5 @@
 using System.IO;
+using UOAIO;
 using Veritas;
 
 namespace UOAIO.Profiles;
@@ -37,7 +38,7 @@ public class Config : PersistableObject
 
 	private static string GetConfigurationPath()
 	{
-		string text = Path.Combine(Directory.GetCurrentDirectory(), "config/Configuration.xml");
+		string text = ClientRuntimeEnvironment.RuntimeDataPath("config/Configuration.xml");
 		DirectoryInfo directoryInfo = new DirectoryInfo(Path.GetDirectoryName(text));
 		if (!directoryInfo.Exists)
 		{

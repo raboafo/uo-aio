@@ -704,7 +704,7 @@ public class PacketHandlers
 		string text4 = pvSrc.ReadUnicodeString();
 		if ((num5 & -8) != 0 || ((num5 & 2) != 0 && num > 0))
 		{
-			using StreamWriter streamWriter = new StreamWriter("Message Localized Affix.log", append: true);
+			using StreamWriter streamWriter = ClientRuntimeEnvironment.CreateRuntimeTextWriter("data/ultima/logs/Message Localized Affix.log", append: true);
 			streamWriter.WriteLine("Serial: 0x{0:X8}; Graphic: 0x{1:X4}; Type: {2}; Number: {3}; Flags: 0x{4:X2}; Name: '{5}'; Affix: '{6}'; Args: '{7}'; Text: '{8}';", num, num2, num3, num4, num5, text, text3, text4, text2);
 		}
 		if (text3.Length > 0)
@@ -3781,7 +3781,7 @@ public class PacketHandlers
 		}
 		default:
 			{
-				StreamWriter streamWriter = new StreamWriter("Messages.log", append: true);
+				StreamWriter streamWriter = ClientRuntimeEnvironment.CreateRuntimeTextWriter("data/ultima/logs/Messages.log", append: true);
 				streamWriter.WriteLine("Serial = 0x{0:X8}", serial);
 				streamWriter.WriteLine("Font = {0}", font);
 				streamWriter.WriteLine("Hue = {0}", hue);
@@ -3796,7 +3796,7 @@ public class PacketHandlers
 			IL_04e5:
 			if (type == 3 || type == 4)
 			{
-				StreamWriter streamWriter2 = new StreamWriter("Messages.log", append: true);
+				StreamWriter streamWriter2 = ClientRuntimeEnvironment.CreateRuntimeTextWriter("data/ultima/logs/Messages.log", append: true);
 				streamWriter2.WriteLine("Serial = 0x{0:X8}", serial);
 				streamWriter2.WriteLine("Font = {0}", font);
 				streamWriter2.WriteLine("Hue = {0}", hue);

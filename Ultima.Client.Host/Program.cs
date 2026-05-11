@@ -19,11 +19,16 @@ internal static class Program
                 Console.Error.WriteLine("A bootstrap pipe name is required. Use --bootstrap-pipe <name>.");
                 exitCode = 1;
             }
+            else if (!parsedArgs.TryGetValue("runtime-data-root", out string runtimeDataRoot) || string.IsNullOrWhiteSpace(runtimeDataRoot))
+            {
+                Console.Error.WriteLine("A runtime data root is required. Use --runtime-data-root <path>.");
+                exitCode = 1;
+            }
             else
             {
                 ClientBootstrapPipeTransport transport = new();
                 ClientBootstrapDefinition bootstrap = transport.Read(pipeName);
-                Engine.Run(bootstrap);
+                Engine.Run(bootstrap, runtimeDataRoot);
                 exitCode = 0;
             }
         }

@@ -93,7 +93,7 @@ public class Macros
 
 	private static string GetConfigurationPath()
 	{
-		string text = Path.Combine(Directory.GetCurrentDirectory(), "config/Macros.xml");
+		string text = ClientRuntimeEnvironment.RuntimeDataPath("config/Macros.xml");
 		DirectoryInfo directoryInfo = new DirectoryInfo(Path.GetDirectoryName(text));
 		if (!directoryInfo.Exists)
 		{

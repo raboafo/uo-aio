@@ -1490,6 +1490,15 @@ public class Engine
 		Directory.CreateDirectory(Engine.FileManager.BasePath(Target));
 	}
 
+	public static void WantRuntimeDirectory(string target)
+	{
+		string path = Engine.FileManager.RuntimeDataPath(target);
+		if (!Directory.Exists(path))
+		{
+			Directory.CreateDirectory(path);
+		}
+	}
+
 	public static void Unlock()
 	{
 		Engine.m_Locked = false;
@@ -2044,9 +2053,10 @@ public class Engine
 		Engine.EventBus = new EventBus();
 	}
 
-	public static void Run(ClientBootstrapDefinition bootstrap)
+	public static void Run(ClientBootstrapDefinition bootstrap, string runtimeDataRoot)
 	{
 		Console.WriteLine("Initializing engine from bootstrap...");
+		ClientRuntimeEnvironment.Initialize(AppDomain.CurrentDomain.BaseDirectory, runtimeDataRoot);
 		Engine.ApplyClientBootstrap(bootstrap);
 		Engine.Initialize();
 	}
@@ -2119,12 +2129,13 @@ public class Engine
 
 		Engine.WantDirectory("data/");
 		Engine.WantDirectory("data/ultima/");
-		Engine.WantDirectory("data/ultima/logs/");
+		Engine.WantRuntimeDirectory("data/ultima/logs/");
 		Debug.Block("Environment");
 		Debug.Trace("Operating System = '{0}'", Environment.OSVersion);
 		Debug.Trace(".NET Framework   = '{0}'", Environment.Version);
 		Debug.Trace("Base Directory   = '{0}'", Engine.m_FileManager.BasePath(""));
 		Debug.Trace("Data Directory   = '{0}'", Engine.m_FileManager.ResolveMUL(""));
+		Debug.Trace("Runtime Directory = '{0}'", Engine.m_FileManager.RuntimeDataPath(""));
 		Debug.EndBlock();
 		Engine.m_Timers = new List<Timer>();
 		Engine.m_Journal = new List<JournalEntry>();

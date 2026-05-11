@@ -262,14 +262,18 @@ public sealed class ShardDefinitionStateStore
     private static Dictionary<string, string> GetPersistedMetadata(ShardDefinition shard)
     {
         Dictionary<string, string> metadata = new(StringComparer.OrdinalIgnoreCase);
-        if (shard.Metadata.TryGetValue(ShardMetadataKeys.ClientAssetPath, out string? assetPath) && !string.IsNullOrWhiteSpace(assetPath))
+        if (shard.Metadata is not null &&
+            shard.Metadata.TryGetValue(ShardMetadataKeys.ClientAssetPath, out string? assetPath) &&
+            !string.IsNullOrWhiteSpace(assetPath))
         {
             metadata[ShardMetadataKeys.ClientAssetPath] = assetPath;
         }
 
         if (string.Equals(shard.Id, UoNewDawnShardId, StringComparison.OrdinalIgnoreCase))
         {
-            if (shard.Metadata.TryGetValue("refresh_token", out string? refreshToken) && !string.IsNullOrWhiteSpace(refreshToken))
+            if (shard.Metadata is not null &&
+                shard.Metadata.TryGetValue("refresh_token", out string? refreshToken) &&
+                !string.IsNullOrWhiteSpace(refreshToken))
             {
                 metadata["refresh_token"] = refreshToken;
             }
@@ -312,7 +316,7 @@ public sealed class ShardDefinitionStateStore
             Host = shard.Host,
             Account = shard.Account,
             Password = shard.Password,
-            ClientVersion = new Version(shard.GetVersionString()),
+            ClientVersion = shard.ClientVersion is null ? null! : new Version(shard.GetVersionString()),
             ServerIP = shard.ServerIP,
             ServerPort = shard.ServerPort,
             Metadata = new Dictionary<string, string>(shard.Metadata ?? new Dictionary<string, string>(), StringComparer.OrdinalIgnoreCase)

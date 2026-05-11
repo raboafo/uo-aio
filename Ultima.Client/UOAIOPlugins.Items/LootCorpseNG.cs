@@ -48,7 +48,7 @@ public class LootCorpseNG
 	
 	private static List<int> ToLoot;
 
-	private static string path;
+	private static string LootPath => ClientRuntimeEnvironment.RuntimeDataPath("AutoLootNG.txt");
 
 	public static readonly ActionCallback Macro_Callback;
 
@@ -74,11 +74,11 @@ public class LootCorpseNG
 
 	public static void Load()
 	{
-		if (!File.Exists(LootCorpseNG.path))
+		if (!File.Exists(LootCorpseNG.LootPath))
 		{
 			return;
 		}
-		string[] array = File.ReadAllLines(LootCorpseNG.path);
+		string[] array = File.ReadAllLines(LootCorpseNG.LootPath);
 		foreach (string text in array)
 		{
 			if (!text.StartsWith("#") && int.TryParse(text, out var result) && !LootCorpseNG.ToLoot.Contains(result))
@@ -96,7 +96,7 @@ public class LootCorpseNG
 		}
 		try
 		{
-			File.AppendAllText(LootCorpseNG.path, itemID + Environment.NewLine);
+			File.AppendAllText(LootCorpseNG.LootPath, itemID + Environment.NewLine);
 			LootCorpseNG.ToLoot.Add(itemID);
 		}
 		catch (Exception ex)
@@ -110,7 +110,6 @@ public class LootCorpseNG
 	{
 		LootCorpseNG._corpses = new Dictionary<int, CorpseInfo>();
 		LootCorpseNG.ToLoot = new List<int>();
-		LootCorpseNG.path = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "AutoLootNG.txt");
 		LootCorpseNG.Macro_Callback = OnMacro;
 		LootCorpseNG.Load();
 	}

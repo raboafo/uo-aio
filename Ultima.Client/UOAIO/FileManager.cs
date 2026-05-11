@@ -10,7 +10,7 @@ public class FileManager
 {
 	private Archive _archive;
 
-	private string m_BasePath = "";
+	private string m_AppBasePath = "";
 
 	private string m_FilePath = "";
 
@@ -59,7 +59,7 @@ public class FileManager
 		using FolderBrowserDialog folderBrowserDialog = new FolderBrowserDialog();
 		folderBrowserDialog.Description = "Select the directory that contains the shard client assets.";
 		folderBrowserDialog.ShowNewFolderButton = false;
-		string rootPath = Path.GetPathRoot(this.m_BasePath);
+		string rootPath = Path.GetPathRoot(this.m_AppBasePath);
 		if (!string.IsNullOrWhiteSpace(rootPath))
 		{
 			folderBrowserDialog.SelectedPath = rootPath;
@@ -99,7 +99,7 @@ public class FileManager
 	public FileManager()
 	{
 		this._archive = Archive.AcquireArchive("ultima");
-		this.m_BasePath = Directory.GetCurrentDirectory();
+		this.m_AppBasePath = ClientRuntimeEnvironment.AppBaseDirectory;
 		this.m_FilePath = this.ResolveShardAssetPath();
 		this.m_Error = this.m_FilePath == null;
 	}
@@ -110,7 +110,37 @@ public class FileManager
 
 	public string BasePath(string Path)
 	{
-		return System.IO.Path.Combine(this.m_BasePath, Path);
+		return ClientRuntimeEnvironment.AppPath(Path);
+	}
+
+	public string RuntimeDataPath(string Path)
+	{
+		return ClientRuntimeEnvironment.RuntimeDataPath(Path);
+	}
+
+	public FileStream CreateUniqueRuntime(string basePath, string extension)
+	{
+		string path = this.RuntimeDataPath($"{basePath}{extension}");
+		int num = 0;
+		do
+		{
+			try
+			{
+				string directory = System.IO.Path.GetDirectoryName(path);
+				if (!string.IsNullOrWhiteSpace(directory))
+				{
+					Directory.CreateDirectory(directory);
+				}
+
+				return new FileStream(path, FileMode.Create, FileAccess.Write, FileShare.Read);
+			}
+			catch
+			{
+				path = this.RuntimeDataPath($"{basePath}{++num}{extension}");
+			}
+		}
+		while (num < 1000);
+		throw new Exception(string.Format("Unable to create unique runtime file (basePath='{0}', extension='{0}')", basePath, extension));
 	}
 
 	public Stream OpenMUL(Files File)
