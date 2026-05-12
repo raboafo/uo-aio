@@ -146,7 +146,8 @@ internal static class Program
                 StateFilePath = Path.Combine(appRoot, "launcher-state.json"),
                 ActiveShardStateFilePath = Path.Combine(appRoot, "active-shard-state.json"),
                 ShardStateDirectory = Path.Combine(appRoot, "shards"),
-                ShardManifestPath = Path.Combine(appRoot, "shards.json")
+                ShardManifestPath = Path.Combine(appRoot, "shards.json"),
+                ProtectedLicenseSecretsPath = Path.Combine(appRoot, "license-secrets.bin")
             };
 
             ShardDefinitionStateStore store = new(paths);
@@ -269,13 +270,13 @@ internal static class Program
                 StateFilePath = Path.Combine(appRoot, "launcher-state.json"),
                 ActiveShardStateFilePath = Path.Combine(appRoot, "active-shard-state.json"),
                 ShardStateDirectory = Path.Combine(appRoot, "shards"),
-                ShardManifestPath = Path.Combine(appRoot, "shards.json")
+                ShardManifestPath = Path.Combine(appRoot, "shards.json"),
+                ProtectedLicenseSecretsPath = Path.Combine(appRoot, "license-secrets.bin")
             };
 
             LauncherStateStore store = new(paths);
             LauncherState state = new()
             {
-                LicenseKey = "UOAIO-TEST-KEY",
                 SelectedShardId = "new-renaissance"
             };
 
@@ -300,11 +301,47 @@ internal static class Program
 
             LauncherState loadedState = await store.LoadAsync().ConfigureAwait(false);
             ActiveShardState? loadedActive = await store.LoadActiveShardStateAsync().ConfigureAwait(false);
+            string launcherStateJson = await File.ReadAllTextAsync(paths.StateFilePath).ConfigureAwait(false);
             Assert(loadedState.SelectedShardId == state.SelectedShardId, "Selected shard id did not round-trip.");
+            Assert(!launcherStateJson.Contains("licenseKey", StringComparison.OrdinalIgnoreCase), "launcher-state.json should not store a raw license key.");
             Assert(loadedActive is not null, "Active state was not loaded.");
             Assert(loadedActive!.SchemaVersion == 3, "Expected schema version 3.");
             Assert(loadedActive.Runtime.Account == "tester", "Active state account mismatch.");
             Assert(loadedActive.Runtime.ServerIP!.ToString() == "203.0.113.10", "Resolved IP did not round-trip.");
+
+            ProtectedLicenseSecretStore secretStore = new(paths);
+            await secretStore.SaveAsync(new ProtectedLicenseSecrets
+            {
+                LicenseKey = "UOAIO-SECRET-KEY",
+                SessionToken = "session-token",
+                MachineBinding = "machine-binding",
+                TrustedTimeSnapshot = new TrustedTimeSnapshot
+                {
+                    TrustedUtc = DateTimeOffset.UtcNow,
+                    TickCount64 = Environment.TickCount64,
+                    LastResponseId = "resp-1"
+                }
+            }).ConfigureAwait(false);
+
+            byte[] protectedBytes = await File.ReadAllBytesAsync(paths.ProtectedLicenseSecretsPath).ConfigureAwait(false);
+            string secretFileText = Encoding.UTF8.GetString(protectedBytes);
+            Assert(!secretFileText.Contains("UOAIO-SECRET-KEY", StringComparison.Ordinal), "Protected license storage must not contain plaintext secrets.");
+
+            ProtectedLicenseSecrets? loadedSecrets = await secretStore.LoadAsync().ConfigureAwait(false);
+            Assert(loadedSecrets is not null && loadedSecrets.LicenseKey == "UOAIO-SECRET-KEY", "Protected license key did not round-trip.");
+
+            await File.WriteAllBytesAsync(paths.ProtectedLicenseSecretsPath, new byte[] { 0x01, 0x02, 0x03 }).ConfigureAwait(false);
+            bool threw = false;
+            try
+            {
+                await secretStore.LoadAsync().ConfigureAwait(false);
+            }
+            catch
+            {
+                threw = true;
+            }
+
+            Assert(threw, "Corrupted protected secret storage should fail closed.");
         }
         finally
         {
@@ -323,7 +360,8 @@ internal static class Program
                 StateFilePath = Path.Combine(appRoot, "launcher-state.json"),
                 ActiveShardStateFilePath = Path.Combine(appRoot, "active-shard-state.json"),
                 ShardStateDirectory = Path.Combine(appRoot, "shards"),
-                ShardManifestPath = Path.Combine(appRoot, "shards.json")
+                ShardManifestPath = Path.Combine(appRoot, "shards.json"),
+                ProtectedLicenseSecretsPath = Path.Combine(appRoot, "license-secrets.bin")
             };
 
             ShardDefinition shard = new()
@@ -369,11 +407,9 @@ internal static class Program
             await File.WriteAllTextAsync(clientExePath, "stub-host").ConfigureAwait(false);
             await File.WriteAllTextAsync(dependencyPath, "stub-client").ConfigureAwait(false);
 
-            string sessionRoot = Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-                "UOAIO",
-                "ClientRuntime",
-                "sessions");
+            string runtimeRoot = Path.Combine(appRoot, "runtime-root");
+            Environment.SetEnvironmentVariable("UOAIO_CLIENT_RUNTIME_ROOT", runtimeRoot);
+            string sessionRoot = Path.Combine(runtimeRoot, "sessions");
             Directory.CreateDirectory(sessionRoot);
             string expiredSessionPath = Path.Combine(sessionRoot, "expired-test-session-" + Guid.NewGuid().ToString("N"));
             Directory.CreateDirectory(expiredSessionPath);
@@ -394,6 +430,7 @@ internal static class Program
         }
         finally
         {
+            Environment.SetEnvironmentVariable("UOAIO_CLIENT_RUNTIME_ROOT", null);
             Directory.Delete(appRoot, recursive: true);
         }
     }
@@ -489,10 +526,19 @@ internal static class Program
 
     private static async Task TestLicenseClientAsync()
     {
+        using RSA rsa = RSA.Create(2048);
+        string publicPem = rsa.ExportRSAPublicKeyPem();
+
         TestHttpMessageHandler handler = new(async request =>
         {
             string body = await request.Content!.ReadAsStringAsync().ConfigureAwait(false);
-            if (body.Contains("bad-key", StringComparison.Ordinal))
+            using JsonDocument bodyDocument = JsonDocument.Parse(body);
+            string clientNonce = bodyDocument.RootElement.GetProperty("clientNonce").GetString() ?? string.Empty;
+            string? licenseKey = bodyDocument.RootElement.TryGetProperty("licenseKey", out JsonElement licenseElement)
+                ? licenseElement.GetString()
+                : null;
+
+            if (string.Equals(licenseKey, "bad-key", StringComparison.Ordinal))
             {
                 return new HttpResponseMessage(HttpStatusCode.Forbidden)
                 {
@@ -500,24 +546,128 @@ internal static class Program
                 };
             }
 
+            if (request.RequestUri!.AbsolutePath.Contains("/launcher/session/start", StringComparison.Ordinal))
+            {
+                string echoedNonce = string.Equals(licenseKey, "nonce-bad", StringComparison.Ordinal) ? "wrong-nonce" : clientNonce;
+                string payload = CreateSignedLicenseEnvelopeJson(rsa, new
+                {
+                    responseId = Guid.NewGuid().ToString("N"),
+                    licenseId = "lic-1",
+                    status = "active",
+                    productCode = LauncherDefaults.ProductCode,
+                    machineBinding = "hwid",
+                    issuedAtUtc = "2026-05-11T00:00:00Z",
+                    notBeforeUtc = "2026-05-11T00:00:00Z",
+                    expiresAtUtc = "2026-05-12T00:00:00Z",
+                    serverTimeUtc = "2026-05-11T00:00:00Z",
+                    serverNonce = "srv-1",
+                    clientNonce = echoedNonce,
+                    sessionToken = "jwt-123",
+                    sessionTokenId = "act-1",
+                    policy = new
+                    {
+                        maxDevices = 3,
+                        heartbeatMinutes = 15,
+                        graceHours = 12,
+                        resetAllowance = 5,
+                        resetUsed = 1,
+                        offlineTokenAllow = true
+                    }
+                });
+
+                return new HttpResponseMessage(HttpStatusCode.OK)
+                {
+                    Content = new StringContent(payload, Encoding.UTF8, "application/json")
+                };
+            }
+
+            if (request.RequestUri.AbsolutePath.Contains("/machines/heartbeat", StringComparison.Ordinal))
+            {
+                string payload = CreateSignedLicenseEnvelopeJson(rsa, new
+                {
+                    responseId = Guid.NewGuid().ToString("N"),
+                    licenseId = "lic-1",
+                    status = "active",
+                    productCode = LauncherDefaults.ProductCode,
+                    machineBinding = "hwid",
+                    issuedAtUtc = "2026-05-11T00:05:00Z",
+                    notBeforeUtc = "2026-05-11T00:05:00Z",
+                    expiresAtUtc = "2026-05-12T00:00:00Z",
+                    serverTimeUtc = "2026-05-11T00:05:00Z",
+                    serverNonce = "srv-2",
+                    clientNonce = clientNonce,
+                    sessionToken = "jwt-123",
+                    sessionTokenId = "act-1",
+                    policy = new
+                    {
+                        maxDevices = 3,
+                        heartbeatMinutes = 15,
+                        graceHours = 12,
+                        resetAllowance = 5,
+                        resetUsed = 1,
+                        offlineTokenAllow = true
+                    }
+                });
+
+                return new HttpResponseMessage(HttpStatusCode.OK)
+                {
+                    Content = new StringContent(payload, Encoding.UTF8, "application/json")
+                };
+            }
+
             return new HttpResponseMessage(HttpStatusCode.OK)
             {
-                Content = new StringContent(
-                    "{\"sessionToken\":\"jwt-123\",\"expiresAt\":\"2026-05-01T00:00:00Z\",\"licenseId\":\"lic-1\",\"status\":\"active\",\"policy\":{\"maxDevices\":3,\"heartbeatMinutes\":15,\"graceHours\":12,\"resetAllowance\":5,\"resetUsed\":1,\"offlineTokenAllow\":true}}",
-                    Encoding.UTF8,
-                    "application/json")
+                Content = new StringContent(CreateSignedLicenseEnvelopeJson(rsa, new
+                {
+                    responseId = Guid.NewGuid().ToString("N"),
+                    licenseId = "lic-1",
+                    status = "active",
+                    productCode = LauncherDefaults.ProductCode,
+                    machineBinding = "hwid",
+                    issuedAtUtc = "2026-05-11T00:00:00Z",
+                    notBeforeUtc = "2026-05-11T00:00:00Z",
+                    expiresAtUtc = "2026-05-11T12:00:00Z",
+                    serverTimeUtc = "2026-05-11T00:00:00Z",
+                    serverNonce = "srv-3",
+                    clientNonce = clientNonce,
+                    offlineToken = "offline-123",
+                    sessionTokenId = "act-1",
+                    policy = new
+                    {
+                        maxDevices = 3,
+                        heartbeatMinutes = 15,
+                        graceHours = 12,
+                        resetAllowance = 5,
+                        resetUsed = 1,
+                        offlineTokenAllow = true
+                    }
+                }), Encoding.UTF8, "application/json")
             };
         });
 
-        LauncherLicenseClient client = new(new HttpClient(handler));
-        LicenseSessionInfo session = await client.StartSessionAsync(new Uri("http://localhost:8080"), "good-key", "hwid", "machine").ConfigureAwait(false);
+        LicenseTrustSettings trust = new()
+        {
+            ProductionLicenseServerUrl = "https://licenses.example.invalid",
+            SigningPublicKeyPem = publicPem,
+            AllowDeveloperOverride = true
+        };
+        LauncherLicenseClient client = new(new HttpClient(handler), trust);
+        List<ReplayCacheEntry> replayCache = new();
+
+        LicenseVerificationResult session = await client.StartSessionAsync(new Uri("http://localhost:8080"), "good-key", "hwid", "machine", replayCache, null).ConfigureAwait(false);
         Assert(session.SessionToken == "jwt-123", "License client did not parse the session token.");
-        Assert(session.Policy.OfflineTokenAllowed, "License policy flag did not parse.");
+        Assert(session.Summary.Policy.OfflineTokenAllowed, "License policy flag did not parse.");
+
+        OfflineLicenseGrant offlineGrant = await client.IssueOfflineGrantAsync(new Uri("http://localhost:8080"), session.SessionToken, "hwid", replayCache, session.TrustedTimeSnapshot).ConfigureAwait(false);
+        Assert(offlineGrant.OfflineToken == "offline-123", "Offline grant did not round-trip.");
+
+        LicenseVerificationResult heartbeat = await client.HeartbeatAsync(new Uri("http://localhost:8080"), "good-key", session.SessionToken, "hwid", replayCache, session.TrustedTimeSnapshot).ConfigureAwait(false);
+        Assert(heartbeat.Summary.Status == "active", "Heartbeat did not return an active state.");
 
         bool threw = false;
         try
         {
-            await client.StartSessionAsync(new Uri("http://localhost:8080"), "bad-key", "hwid", "machine").ConfigureAwait(false);
+            await client.StartSessionAsync(new Uri("http://localhost:8080"), "bad-key", "hwid", "machine", replayCache, session.TrustedTimeSnapshot).ConfigureAwait(false);
         }
         catch (LicenseValidationException)
         {
@@ -525,6 +675,38 @@ internal static class Program
         }
 
         Assert(threw, "Expected invalid license flow to throw.");
+
+        threw = false;
+        try
+        {
+            await client.StartSessionAsync(new Uri("http://localhost:8080"), "nonce-bad", "hwid", "machine", replayCache, session.TrustedTimeSnapshot).ConfigureAwait(false);
+        }
+        catch (LicenseValidationException)
+        {
+            threw = true;
+        }
+
+        Assert(threw, "Expected mismatched nonce flow to throw.");
+
+        using RSA wrongRsa = RSA.Create(2048);
+        LauncherLicenseClient wrongKeyClient = new(new HttpClient(handler), new LicenseTrustSettings
+        {
+            ProductionLicenseServerUrl = "https://licenses.example.invalid",
+            SigningPublicKeyPem = wrongRsa.ExportRSAPublicKeyPem(),
+            AllowDeveloperOverride = true
+        });
+
+        threw = false;
+        try
+        {
+            await wrongKeyClient.StartSessionAsync(new Uri("http://localhost:8080"), "good-key", "hwid", "machine", replayCache, session.TrustedTimeSnapshot).ConfigureAwait(false);
+        }
+        catch (LicenseValidationException)
+        {
+            threw = true;
+        }
+
+        Assert(threw, "Expected wrong signing key flow to throw.");
     }
 
     private static async Task TestManifestVerificationAsync()
@@ -641,6 +823,22 @@ internal static class Program
         };
 
         await File.WriteAllTextAsync(path, JsonSerializer.Serialize(envelope, JsonOptions)).ConfigureAwait(false);
+    }
+
+    private static string CreateSignedLicenseEnvelopeJson<T>(RSA rsa, T payload)
+    {
+        JsonSerializerOptions compactOptions = new() { PropertyNamingPolicy = JsonNamingPolicy.CamelCase, WriteIndented = false };
+        JsonElement payloadElement = JsonSerializer.SerializeToElement(payload, compactOptions);
+        string payloadJson = payloadElement.GetRawText();
+        byte[] payloadBytes = Encoding.UTF8.GetBytes(payloadJson);
+        byte[] signature = rsa.SignData(payloadBytes, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
+        return JsonSerializer.Serialize(new
+        {
+            payload = payloadElement,
+            signatureBase64 = Convert.ToBase64String(signature),
+            algorithm = "RS256",
+            keyId = LauncherDefaults.LicenseSigningKeyId
+        }, compactOptions);
     }
 
     private static string CreateZipPackage(string root, string zipName, string fileName, string contents)

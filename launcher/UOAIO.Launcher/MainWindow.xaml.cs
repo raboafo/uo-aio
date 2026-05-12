@@ -1,45 +1,29 @@
 using System.Net.Http;
-using System.Text.Json;
 using System.Windows;
-using System.Windows.Controls;
-using System.Windows.Media;
+using System.Windows.Threading;
 using UOAIO.Launcher.Core;
-using UOAIO.Launcher.ShardWorkflows;
-using UOAIO.ShardRuntime;
-using Brushes = System.Windows.Media.Brushes;
+using UOAIO.Launcher.Scenes;
 
 namespace UOAIO.Launcher;
 
 public partial class MainWindow : Window
 {
     private readonly HttpClient _httpClient = new();
-    private readonly JsonSerializerOptions _previewOptions = new()
-    {
-        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-        WriteIndented = true,
-        Converters =
-        {
-            new IPAddressJsonConverter(),
-            new VersionJsonConverter()
-        }
-    };
-    private readonly ShardWorkflowRegistry<Func<IShardWorkflowControl>> _workflowRegistry = new(new[]
-    {
-        new ShardWorkflowRegistration<Func<IShardWorkflowControl>>("new-renaissance", static () => new NewRenaissanceWorkflowControl()),
-        new ShardWorkflowRegistration<Func<IShardWorkflowControl>>("uo-new-dawn", static () => new UoNewDawnWorkflowControl()),
-        new ShardWorkflowRegistration<Func<IShardWorkflowControl>>("tides-of-power", static () => new TidesOfPowerWorkflowControl())
-    });
+    private readonly DispatcherTimer _heartbeatTimer = new();
 
-    private bool _isInitializing;
     private LauncherPaths? _paths;
     private LauncherStateStore? _stateStore;
     private ShardDefinitionStateStore? _shardStateStore;
+    private ProtectedLicenseSecretStore? _secretStore;
+    private LauncherLicenseService? _licenseService;
     private LauncherState _state = new();
-    private ShardCatalog _catalog = new();
+    private LicenseGateSceneControl? _licenseGateScene;
+    private MainLauncherSceneControl? _mainLauncherScene;
 
     public MainWindow()
     {
         InitializeComponent();
+        _heartbeatTimer.Tick += HeartbeatTimer_Tick;
     }
 
     private async void Window_Loaded(object sender, RoutedEventArgs e)
@@ -49,255 +33,135 @@ public partial class MainWindow : Window
 
     private async Task InitializeAsync()
     {
-        _isInitializing = true;
-        try
+        _paths = LauncherPaths.CreateDefault(AppContext.BaseDirectory);
+        _stateStore = new LauncherStateStore(_paths);
+        _shardStateStore = new ShardDefinitionStateStore(_paths);
+        _secretStore = new ProtectedLicenseSecretStore(_paths);
+        _state = await _stateStore.LoadAsync();
+
+        LicenseTrustSettings trustSettings = new()
         {
-            _paths = LauncherPaths.CreateDefault(AppContext.BaseDirectory);
-            _stateStore = new LauncherStateStore(_paths);
-            _shardStateStore = new ShardDefinitionStateStore(_paths);
-            LauncherState state = await _stateStore.LoadAsync();
-            _state = state;
-            LicenseServerUrlTextBox.Text = string.IsNullOrWhiteSpace(state.LicenseServerUrl) ? LauncherDefaults.DefaultLicenseServerUrl : state.LicenseServerUrl;
-            LicenseKeyTextBox.Text = state.LicenseKey;
-            RememberInputsCheckBox.IsChecked = state.RememberInputs;
-            ActiveStatePathTextBlock.Text = "named-pipe://not-prepared";
+            AllowDeveloperOverride = LauncherDefaults.AllowDeveloperLicenseServerOverride
+        };
+        LauncherLicenseClient licenseClient = new(_httpClient, trustSettings);
+        _licenseService = new LauncherLicenseService(_stateStore, _secretStore, licenseClient, trustSettings);
 
-            ShardCatalogService catalogService = new();
-            try
-            {
-                _catalog = await catalogService.LoadAsync(_paths.ShardManifestPath);
-                ShardListBox.ItemsSource = _catalog.Shards;
-                if (!string.IsNullOrWhiteSpace(_state.SelectedShardId))
-                {
-                    ShardDefinition? preferred = _catalog.Shards.FirstOrDefault(shard => string.Equals(shard.Id, _state.SelectedShardId, StringComparison.OrdinalIgnoreCase));
-                    if (preferred is not null)
-                    {
-                        ShardListBox.SelectedItem = preferred;
-                    }
-                }
+        _licenseGateScene = new LicenseGateSceneControl();
+        _licenseGateScene.ValidateRequested += LicenseGateScene_ValidateRequested;
 
-                if (ShardListBox.SelectedItem is null && _catalog.Shards.Count > 0)
-                {
-                    ShardListBox.SelectedIndex = 0;
-                }
-            }
-            catch (Exception ex)
-            {
-                ShowSaveStatus($"Failed to load shard catalog: {ex.Message}", isError: true);
-            }
-
-            ActiveStatePreviewTextBox.Text = "No client bootstrap has been prepared yet.";
-            UpdateLicenseStatusFromState();
-        }
-        finally
-        {
-            _isInitializing = false;
-        }
+        LicenseGateState gateState = await _licenseService.InitializeAsync(_state).ConfigureAwait(true);
+        await ShowSceneAsync(gateState).ConfigureAwait(true);
     }
 
-    private void UpdateLicenseStatusFromState()
+    private async void LicenseGateScene_ValidateRequested(object? sender, LicenseValidationRequestedEventArgs e)
     {
-        if (_state.LastLicenseSession is null)
+        if (_licenseGateScene is null || _licenseService is null || _stateStore is null)
         {
-            ShowLicenseStatus("License has not been validated yet.", isError: false);
             return;
         }
 
-        ShowLicenseStatus(
-            $"Validated license {_state.LastLicenseSession.LicenseId} until {_state.LastLicenseSession.ExpiresAtUtc:u}. Session will be reused only while the license key and server URL remain unchanged.",
-            isError: false);
-    }
-
-    private async void ValidateLicenseButton_Click(object sender, RoutedEventArgs e)
-    {
-        string serverUrl = LicenseServerUrlTextBox.Text.Trim();
-        string licenseKey = LicenseKeyTextBox.Text.Trim();
-        if (!Uri.TryCreate(serverUrl, UriKind.Absolute, out Uri? baseUri))
+        if (string.IsNullOrWhiteSpace(e.LicenseKey))
         {
-            ShowLicenseStatus("Enter a valid license server URL.", isError: true);
+            _licenseGateScene.SetState(new LicenseGateState
+            {
+                AccessMode = LicenseAccessMode.Unlicensed,
+                StatusMessage = "Enter a license key before validating.",
+                RecoveredLicenseKey = string.Empty
+            }, _state);
             return;
         }
 
-        if (string.IsNullOrWhiteSpace(licenseKey))
-        {
-            ShowLicenseStatus("Enter a license key before validating.", isError: true);
-            return;
-        }
+        _state.DeveloperLicenseServerUrlOverride = LauncherDefaults.AllowDeveloperLicenseServerOverride
+            ? e.DeveloperServerOverride
+            : string.Empty;
 
-        ValidateLicenseButton.IsEnabled = false;
+        _licenseGateScene.SetBusy(true);
         try
         {
-            LauncherLicenseClient client = new(_httpClient);
-            LicenseSessionInfo session = await client.StartSessionAsync(baseUri, licenseKey, HardwareFingerprintProvider.CreateSignal(), Environment.MachineName);
-            _state.LicenseServerUrl = serverUrl;
-            _state.LicenseKey = licenseKey;
-            _state.LastLicenseSession = session;
-            _state.RememberInputs = RememberInputsCheckBox.IsChecked == true;
-            await _stateStore!.SaveAsync(_state);
-            ShowLicenseStatus($"License active. Session expires at {session.ExpiresAtUtc:u}.", isError: false);
+            await _stateStore.SaveAsync(_state).ConfigureAwait(true);
+            LicenseGateState gateState = await _licenseService.ValidateAsync(_state, e.LicenseKey).ConfigureAwait(true);
+            await ShowSceneAsync(gateState).ConfigureAwait(true);
         }
         catch (LicenseValidationException ex)
         {
-            _state.LastLicenseSession = null;
-            ShowLicenseStatus($"License validation failed: {ex.Message}", isError: true);
+            _licenseGateScene.SetState(new LicenseGateState
+            {
+                AccessMode = LicenseAccessMode.Unlicensed,
+                StatusMessage = $"License validation failed: {ex.Message}",
+                RecoveredLicenseKey = e.LicenseKey.Trim()
+            }, _state);
         }
         catch (Exception ex)
         {
-            _state.LastLicenseSession = null;
-            ShowLicenseStatus($"Unexpected license validation error: {ex.Message}", isError: true);
+            _licenseGateScene.SetState(new LicenseGateState
+            {
+                AccessMode = LicenseAccessMode.Unlicensed,
+                StatusMessage = $"Unexpected validation error: {ex.Message}",
+                RecoveredLicenseKey = e.LicenseKey.Trim()
+            }, _state);
         }
         finally
         {
-            ValidateLicenseButton.IsEnabled = true;
+            _licenseGateScene.SetBusy(false);
         }
     }
 
-    private void ShardListBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    private async Task ShowSceneAsync(LicenseGateState gateState)
     {
-        if (ShardListBox.SelectedItem is not ShardDefinition shard)
+        if (gateState.CanEnterLauncher)
         {
-            SelectedShardNameTextBlock.Text = "No shard selected";
-            SelectedShardDescriptionTextBlock.Text = string.Empty;
-            SelectedShardEndpointTextBlock.Text = string.Empty;
-            ShardWorkflowContentControl.Content = null;
-            ShowSaveStatus(string.Empty, isError: false);
+            _mainLauncherScene ??= new MainLauncherSceneControl();
+            if (_paths is not null && _stateStore is not null && _shardStateStore is not null)
+            {
+                await _mainLauncherScene.InitializeAsync(_paths, _stateStore, _shardStateStore, _state, gateState).ConfigureAwait(true);
+                _mainLauncherScene.UpdateLicenseBanner(gateState);
+            }
+
+            SceneHost.Content = _mainLauncherScene;
+            ConfigureHeartbeat(gateState);
             return;
         }
 
-        SelectedShardNameTextBlock.Text = shard.Name;
-        SelectedShardDescriptionTextBlock.Text = shard.Description;
-        SelectedShardEndpointTextBlock.Text = $"{shard.Host}:{shard.ServerPort}";
-        ShowSaveStatus(string.Empty, isError: false);
-        LoadShardWorkflow(shard);
+        _heartbeatTimer.Stop();
+        _licenseGateScene ??= new LicenseGateSceneControl();
+        _licenseGateScene.ValidateRequested -= LicenseGateScene_ValidateRequested;
+        _licenseGateScene.ValidateRequested += LicenseGateScene_ValidateRequested;
+        _licenseGateScene.SetState(gateState, _state);
+        SceneHost.Content = _licenseGateScene;
     }
 
-    private void LoadShardWorkflow(ShardDefinition shard)
+    private void ConfigureHeartbeat(LicenseGateState gateState)
     {
-        if (_paths is null || _stateStore is null || _shardStateStore is null)
+        int heartbeatMinutes = gateState.Summary?.Policy.HeartbeatMinutes ?? 15;
+        if (heartbeatMinutes <= 0)
         {
-            ShardWorkflowContentControl.Content = null;
+            heartbeatMinutes = 15;
+        }
+
+        _heartbeatTimer.Interval = TimeSpan.FromMinutes(Math.Max(1, heartbeatMinutes));
+        _heartbeatTimer.Start();
+    }
+
+    private async void HeartbeatTimer_Tick(object? sender, EventArgs e)
+    {
+        if (_licenseService is null)
+        {
             return;
         }
 
+        _heartbeatTimer.Stop();
         try
         {
-            IShardWorkflowControl workflow = _workflowRegistry.Resolve(shard.Id).Invoke();
-            workflow.Initialize(new ShardWorkflowHostContext
-            {
-                Paths = _paths,
-                StateStore = _stateStore,
-                ShardStateStore = _shardStateStore,
-                State = _state,
-                HasValidLicenseSession = HasValidLicenseSession,
-                ShouldRememberInputs = () => RememberInputsCheckBox.IsChecked == true,
-                PublishPreparedState = RenderActiveStatePreview,
-                ShowStatus = ShowSaveStatus
-            }, shard);
-
-            ShardWorkflowContentControl.Content = workflow;
+            LicenseGateState gateState = await _licenseService.HeartbeatAsync(_state).ConfigureAwait(true);
+            await ShowSceneAsync(gateState).ConfigureAwait(true);
         }
         catch (Exception ex)
         {
-            ShardWorkflowContentControl.Content = null;
-            ShowSaveStatus($"Unable to load shard workflow: {ex.Message}", true);
-        }
-    }
-
-    private bool HasValidLicenseSession()
-    {
-        return _state.LastLicenseSession is not null &&
-               _state.LastLicenseSession.ExpiresAtUtc > DateTimeOffset.UtcNow &&
-               string.Equals(_state.LicenseKey, LicenseKeyTextBox.Text.Trim(), StringComparison.Ordinal) &&
-               string.Equals(_state.LicenseServerUrl, LicenseServerUrlTextBox.Text.Trim(), StringComparison.OrdinalIgnoreCase);
-    }
-
-    private void RenderActiveStatePreview(ClientBootstrapDefinition bootstrap, string bootstrapTransport)
-    {
-        ClientBootstrapDefinition copy = new()
-        {
-            SchemaVersion = bootstrap.SchemaVersion,
-            CreatedAtUtc = bootstrap.CreatedAtUtc,
-            Shard = new ShardDefinition
+            await ShowSceneAsync(new LicenseGateState
             {
-                Id = bootstrap.Shard.Id,
-                Name = bootstrap.Shard.Name,
-                Description = bootstrap.Shard.Description,
-                Host = bootstrap.Shard.Host,
-                Account = Mask(bootstrap.Shard.Account),
-                Password = Mask(bootstrap.Shard.Password),
-                ClientVersion = bootstrap.Shard.ClientVersion,
-                ServerIP = bootstrap.Shard.ServerIP,
-                ServerPort = bootstrap.Shard.ServerPort,
-                Metadata = MaskMetadata(bootstrap.Shard.Metadata)
-            }
-        };
-
-        ActiveStatePathTextBlock.Text = bootstrapTransport;
-        ActiveStatePreviewTextBox.Text = JsonSerializer.Serialize(copy, _previewOptions);
-    }
-
-    private static string Mask(string value)
-    {
-        if (string.IsNullOrEmpty(value))
-        {
-            return string.Empty;
+                AccessMode = LicenseAccessMode.Unlicensed,
+                StatusMessage = $"Heartbeat failed: {ex.Message}"
+            }).ConfigureAwait(true);
         }
-
-        return value.Length <= 8 ? new string('*', value.Length) : $"{value[..4]}...{value[^4..]}";
-    }
-
-    private static Dictionary<string, string> MaskMetadata(IReadOnlyDictionary<string, string> metadata)
-    {
-        Dictionary<string, string> masked = new(StringComparer.OrdinalIgnoreCase);
-        foreach ((string key, string value) in metadata)
-        {
-            masked[key] = ShouldMask(key) ? Mask(value) : value;
-        }
-
-        return masked;
-    }
-
-    private static bool ShouldMask(string key)
-    {
-        string normalized = key.ToLowerInvariant();
-        return normalized.Contains("password", StringComparison.Ordinal) ||
-               normalized.Contains("token", StringComparison.Ordinal) ||
-               normalized.Contains("secret", StringComparison.Ordinal) ||
-               normalized.Contains("jwt", StringComparison.Ordinal) ||
-               normalized.Contains("code", StringComparison.Ordinal) ||
-               normalized.Contains("session", StringComparison.Ordinal);
-    }
-
-    private void LicenseInputsChanged(object sender, TextChangedEventArgs e)
-    {
-        if (_isInitializing)
-        {
-            return;
-        }
-
-        if (ReferenceEquals(sender, LicenseKeyTextBox) && string.Equals(_state.LicenseKey, LicenseKeyTextBox.Text, StringComparison.Ordinal))
-        {
-            return;
-        }
-
-        if (ReferenceEquals(sender, LicenseServerUrlTextBox) && string.Equals(_state.LicenseServerUrl, LicenseServerUrlTextBox.Text, StringComparison.OrdinalIgnoreCase))
-        {
-            return;
-        }
-
-        _state.LastLicenseSession = null;
-        ShowLicenseStatus("License inputs changed. Revalidate before saving active shard state.", isError: false);
-    }
-
-    private void ShowLicenseStatus(string message, bool isError)
-    {
-        LicenseStatusTextBlock.Text = message;
-        LicenseStatusTextBlock.Foreground = isError ? Brushes.Firebrick : Brushes.DarkGreen;
-    }
-
-    private void ShowSaveStatus(string message, bool isError)
-    {
-        SaveStatusTextBlock.Text = message;
-        SaveStatusTextBlock.Foreground = isError ? Brushes.Firebrick : Brushes.DarkGreen;
     }
 }

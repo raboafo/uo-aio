@@ -1,0 +1,150 @@
+<UserControl x:Class="UOAIO.Launcher.Scenes.MainLauncherSceneControl"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <Grid Margin="20">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+
+        <Border Padding="14"
+                Background="#F8FAFC"
+                BorderBrush="#D9DFE8"
+                BorderThickness="1">
+            <StackPanel>
+                <TextBlock FontSize="20"
+                           FontWeight="SemiBold"
+                           Text="Launcher Access Granted" />
+                <TextBlock x:Name="LicenseBannerTextBlock"
+                           Margin="0,8,0,0"
+                           Foreground="#44505D"
+                           TextWrapping="Wrap" />
+            </StackPanel>
+        </Border>
+
+        <Grid Grid.Row="1"
+              Margin="0,20,0,0">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="360" />
+                <ColumnDefinition Width="20" />
+                <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+
+            <ScrollViewer VerticalScrollBarVisibility="Auto">
+                <StackPanel>
+                    <TextBlock FontSize="28"
+                               FontWeight="SemiBold"
+                               Text="Shard Selection" />
+                    <TextBlock Margin="0,8,0,20"
+                               Foreground="#666666"
+                               TextWrapping="Wrap"
+                               Text="Choose a shard and let its workflow prepare runtime state for the client." />
+
+                    <Border Padding="16"
+                            Background="#F6F8FB"
+                            BorderBrush="#D9DFE8"
+                            BorderThickness="1">
+                        <StackPanel>
+                            <TextBlock FontSize="18"
+                                       FontWeight="SemiBold"
+                                       Text="Shards" />
+                            <TextBlock Margin="0,12,0,8"
+                                       Foreground="#666666"
+                                       Text="Select the shard whose runtime behavior should become active." />
+                            <ListBox x:Name="ShardListBox"
+                                     MinHeight="240"
+                                     DisplayMemberPath="Name"
+                                     SelectionChanged="ShardListBox_SelectionChanged" />
+                            <CheckBox x:Name="RememberInputsCheckBox"
+                                      Margin="0,12,0,0"
+                                      Content="Remember shard credentials and input values on this machine" />
+                        </StackPanel>
+                    </Border>
+                </StackPanel>
+            </ScrollViewer>
+
+            <Border Grid.Column="2"
+                    Padding="20"
+                    Background="#FFFFFF"
+                    BorderBrush="#D9DFE8"
+                    BorderThickness="1">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+
+                    <StackPanel>
+                        <TextBlock FontSize="22"
+                                   FontWeight="SemiBold"
+                                   Text="Active Shard Preparation" />
+                        <TextBlock Margin="0,8,0,0"
+                                   Foreground="#666666"
+                                   TextWrapping="Wrap"
+                                   Text="Each shard owns its own preparation flow and writes a slim runtime state for the client to consume later." />
+                    </StackPanel>
+
+                    <Border Grid.Row="1"
+                            Margin="0,20,0,16"
+                            Padding="16"
+                            Background="#F8FAFC"
+                            BorderBrush="#D9DFE8"
+                            BorderThickness="1">
+                        <StackPanel>
+                            <TextBlock x:Name="SelectedShardNameTextBlock"
+                                       FontSize="18"
+                                       FontWeight="SemiBold"
+                                       Text="No shard selected" />
+                            <TextBlock x:Name="SelectedShardDescriptionTextBlock"
+                                       Margin="0,8,0,0"
+                                       Foreground="#555555"
+                                       TextWrapping="Wrap" />
+                            <TextBlock x:Name="SelectedShardEndpointTextBlock"
+                                       Margin="0,8,0,0"
+                                       Foreground="#1F4B7A" />
+                        </StackPanel>
+                    </Border>
+
+                    <ScrollViewer Grid.Row="2"
+                                  VerticalScrollBarVisibility="Auto">
+                        <StackPanel>
+                            <TextBlock FontSize="18"
+                                       FontWeight="SemiBold"
+                                       Text="Shard Workflow" />
+                            <TextBlock Margin="0,8,0,0"
+                                       Foreground="#666666"
+                                       TextWrapping="Wrap"
+                                       Text="The selected shard decides which controls, actions, and transitions it needs in order to prepare runtime state." />
+                            <ContentControl x:Name="ShardWorkflowContentControl"
+                                            Margin="0,16,0,0" />
+                            <TextBlock x:Name="SaveStatusTextBlock"
+                                        Margin="0,12,0,0"
+                                        Foreground="#444444"
+                                        TextWrapping="Wrap" />
+                            <TextBlock Margin="0,20,0,4"
+                                       FontWeight="SemiBold"
+                                       Text="Bootstrap Transport" />
+                            <TextBlock x:Name="ActiveStatePathTextBlock"
+                                       Foreground="#666666"
+                                       TextWrapping="Wrap" />
+                        </StackPanel>
+                    </ScrollViewer>
+
+                    <GroupBox Grid.Row="3"
+                              Margin="0,16,0,0"
+                              Header="Prepared State Preview">
+                        <TextBox x:Name="ActiveStatePreviewTextBox"
+                                 Height="210"
+                                 Padding="12"
+                                 IsReadOnly="True"
+                                 FontFamily="Consolas"
+                                 VerticalScrollBarVisibility="Auto"
+                                 TextWrapping="Wrap" />
+                    </GroupBox>
+                </Grid>
+            </Border>
+        </Grid>
+    </Grid>
+</UserControl>

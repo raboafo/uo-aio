@@ -13,7 +13,33 @@ public static class LauncherDefaults
 {
     public const string ProductCode = "uoaio";
 
-    public const string DefaultLicenseServerUrl = "http://localhost:8080";
+    public const string ProductionLicenseServerUrl = "https://licenses.example.invalid";
+
+    public const string DeveloperDefaultLicenseServerUrl = "http://localhost:8080";
+
+    public const string LicenseSigningKeyId = "placeholder-launcher-license-v1";
+
+    public const string PlaceholderLicenseSigningPublicKeyPem =
+@"-----BEGIN RSA PUBLIC KEY-----
+MIIBCgKCAQEA5wUQgVIX8MO/Wkli/GNN3X+fc4zJOnspQVJjIPmO9Z8ytmyui/1j
+grXXVd9sDDnPm2PGlOAUP0BK4xCdPmknCLCP+KemnZXoQGYfzbTeujlaaggzNKpB
+OPiJDwqZf9Rms0gTGYWmBcaTDfg5tKHi8Lk8eDefhOdQn0L3vS39GCbxmsNPMzru
+OBdKw8QeU+9cvixAl8G3GWwiYX+p96jlTPccKB6aFuAszwsbogd+vZa5nBlC3c2k
+Q2hAN46uMj8LAkIt9sGRoIS8nUGc7iuy1DZ6jyNld44WIFv71npQfUlv0cKxehiM
+5BN/YxF+CmX5tcQfJ3oLVoHd0kSdkfC1IQIDAQAB
+-----END RSA PUBLIC KEY-----";
+
+    public static bool AllowDeveloperLicenseServerOverride
+    {
+        get
+        {
+#if DEBUG
+            return true;
+#else
+            return false;
+#endif
+        }
+    }
 }
 
 public sealed class LauncherPaths
@@ -28,6 +54,8 @@ public sealed class LauncherPaths
 
     public string ShardManifestPath { get; init; } = string.Empty;
 
+    public string ProtectedLicenseSecretsPath { get; init; } = string.Empty;
+
     public static LauncherPaths CreateDefault(string appBaseDirectory)
     {
         string dataRoot = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "UOAIO", "Launcher");
@@ -37,7 +65,8 @@ public sealed class LauncherPaths
             StateFilePath = Path.Combine(dataRoot, "launcher-state.json"),
             ActiveShardStateFilePath = Path.Combine(dataRoot, "active-shard-state.json"),
             ShardStateDirectory = Path.Combine(dataRoot, "shards"),
-            ShardManifestPath = Path.Combine(appBaseDirectory, "Data", "shards.json")
+            ShardManifestPath = Path.Combine(appBaseDirectory, "Data", "shards.json"),
+            ProtectedLicenseSecretsPath = Path.Combine(dataRoot, "license-secrets.bin")
         };
     }
 }
@@ -54,39 +83,23 @@ public sealed class LicensePolicy
 
     public int ResetsUsed { get; set; }
 
+    [JsonPropertyName("offlineTokenAllow")]
     public bool OfflineTokenAllowed { get; set; }
-}
-
-public sealed class LicenseSessionInfo
-{
-    public string LicenseKey { get; set; } = string.Empty;
-
-    public string LicenseId { get; set; } = string.Empty;
-
-    public string ProductCode { get; set; } = string.Empty;
-
-    public string SessionToken { get; set; } = string.Empty;
-
-    public string Status { get; set; } = string.Empty;
-
-    public DateTimeOffset ExpiresAtUtc { get; set; }
-
-    public LicensePolicy Policy { get; set; } = new LicensePolicy();
 }
 
 public sealed class LauncherState
 {
-    public int SchemaVersion { get; set; } = 1;
+    public int SchemaVersion { get; set; } = 2;
 
-    public string LicenseServerUrl { get; set; } = LauncherDefaults.DefaultLicenseServerUrl;
-
-    public string LicenseKey { get; set; } = string.Empty;
+    public string DeveloperLicenseServerUrlOverride { get; set; } = string.Empty;
 
     public string SelectedShardId { get; set; } = string.Empty;
 
     public bool RememberInputs { get; set; } = true;
 
-    public LicenseSessionInfo? LastLicenseSession { get; set; }
+    public LauncherLicenseSummary? LicenseSummary { get; set; }
+
+    public List<ReplayCacheEntry> ReplayCache { get; set; } = new();
 }
 
 public sealed class LauncherStateStore
@@ -451,51 +464,308 @@ public sealed class ShardCatalogService
 public sealed class LauncherLicenseClient
 {
     private readonly HttpClient _httpClient;
+    private readonly LicenseTrustSettings _trustSettings;
 
-    public LauncherLicenseClient(HttpClient httpClient)
+    public LauncherLicenseClient(HttpClient httpClient, LicenseTrustSettings? trustSettings = null)
     {
         _httpClient = httpClient;
+        _trustSettings = trustSettings ?? new LicenseTrustSettings();
     }
 
-    public async Task<LicenseSessionInfo> StartSessionAsync(Uri serviceBaseUri, string licenseKey, string hwidSignal, string machineTag, CancellationToken cancellationToken = default)
+    public async Task<LicenseVerificationResult> StartSessionAsync(
+        Uri serviceBaseUri,
+        string licenseKey,
+        string hwidSignal,
+        string machineTag,
+        List<ReplayCacheEntry> replayCache,
+        TrustedTimeSnapshot? priorTrustedTimeSnapshot,
+        CancellationToken cancellationToken = default)
     {
         Uri requestUri = new Uri(serviceBaseUri, "/internal/v1/launcher/session/start");
-        LauncherSessionStartRequest request = new()
+        string clientNonce = CreateNonce();
+        SignedLicenseRequest request = new()
         {
             LicenseKey = licenseKey.Trim(),
-            Product = LauncherDefaults.ProductCode,
+            ProductCode = LauncherDefaults.ProductCode,
             HWIDSignal = hwidSignal,
             MachineTag = machineTag,
-            UserAgent = "UOAIO Launcher/1.0"
+            UserAgent = "UOAIO Launcher/2.0",
+            ClientNonce = clientNonce
         };
 
+        SignedSessionPayload payload = await PostAndVerifyPayloadAsync<SignedSessionPayload>(requestUri, request, priorTrustedTimeSnapshot, cancellationToken).ConfigureAwait(false);
+        ValidatePayload(payload, clientNonce, hwidSignal, replayCache);
+
+        return new LicenseVerificationResult
+        {
+            LicenseKey = licenseKey.Trim(),
+            ServiceBaseUri = serviceBaseUri,
+            SessionToken = payload.SessionToken,
+            MachineBinding = hwidSignal,
+            ResponseId = payload.ResponseId,
+            ServerTimeUtc = payload.ServerTimeUtc,
+            Summary = new LauncherLicenseSummary
+            {
+                LicenseId = payload.LicenseId,
+                ProductCode = payload.ProductCode,
+                Status = payload.Status,
+                ExpiresAtUtc = payload.ExpiresAtUtc,
+                LastValidatedAtUtc = payload.ServerTimeUtc,
+                IsOfflineMode = false,
+                Policy = ClonePolicy(payload.Policy)
+            },
+            TrustedTimeSnapshot = new TrustedTimeSnapshot
+            {
+                TrustedUtc = payload.ServerTimeUtc,
+                TickCount64 = Environment.TickCount64,
+                LastResponseId = payload.ResponseId
+            }
+        };
+    }
+
+    public async Task<LicenseVerificationResult> HeartbeatAsync(
+        Uri serviceBaseUri,
+        string licenseKey,
+        string sessionToken,
+        string machineBinding,
+        List<ReplayCacheEntry> replayCache,
+        TrustedTimeSnapshot? priorTrustedTimeSnapshot,
+        CancellationToken cancellationToken = default)
+    {
+        Uri requestUri = new Uri(serviceBaseUri, "/internal/v1/machines/heartbeat");
+        string clientNonce = CreateNonce();
+        HeartbeatRequest request = new()
+        {
+            SessionToken = sessionToken,
+            ClientNonce = clientNonce
+        };
+
+        SignedSessionPayload payload = await PostAndVerifyPayloadAsync<SignedSessionPayload>(requestUri, request, priorTrustedTimeSnapshot, cancellationToken).ConfigureAwait(false);
+        ValidatePayload(payload, clientNonce, machineBinding, replayCache);
+
+        return new LicenseVerificationResult
+        {
+            LicenseKey = licenseKey.Trim(),
+            ServiceBaseUri = serviceBaseUri,
+            SessionToken = sessionToken,
+            MachineBinding = machineBinding,
+            ResponseId = payload.ResponseId,
+            ServerTimeUtc = payload.ServerTimeUtc,
+            Summary = new LauncherLicenseSummary
+            {
+                LicenseId = payload.LicenseId,
+                ProductCode = payload.ProductCode,
+                Status = payload.Status,
+                ExpiresAtUtc = payload.ExpiresAtUtc,
+                LastValidatedAtUtc = payload.ServerTimeUtc,
+                IsOfflineMode = false,
+                Policy = ClonePolicy(payload.Policy)
+            },
+            TrustedTimeSnapshot = new TrustedTimeSnapshot
+            {
+                TrustedUtc = payload.ServerTimeUtc,
+                TickCount64 = Environment.TickCount64,
+                LastResponseId = payload.ResponseId
+            }
+        };
+    }
+
+    public async Task<OfflineLicenseGrant> IssueOfflineGrantAsync(
+        Uri serviceBaseUri,
+        string sessionToken,
+        string machineBinding,
+        List<ReplayCacheEntry> replayCache,
+        TrustedTimeSnapshot? priorTrustedTimeSnapshot,
+        CancellationToken cancellationToken = default)
+    {
+        Uri requestUri = new Uri(serviceBaseUri, "/internal/v1/offline-tokens/issue");
+        string clientNonce = CreateNonce();
+        OfflineGrantRequest request = new()
+        {
+            SessionToken = sessionToken,
+            ClientNonce = clientNonce
+        };
+
+        SignedOfflineGrantPayload payload = await PostAndVerifyPayloadAsync<SignedOfflineGrantPayload>(requestUri, request, priorTrustedTimeSnapshot, cancellationToken).ConfigureAwait(false);
+        ValidatePayload(payload, clientNonce, machineBinding, replayCache);
+
+        return new OfflineLicenseGrant
+        {
+            ResponseId = payload.ResponseId,
+            OfflineToken = payload.OfflineToken,
+            LicenseId = payload.LicenseId,
+            ProductCode = payload.ProductCode,
+            Status = payload.Status,
+            MachineBinding = payload.MachineBinding,
+            SessionTokenId = payload.SessionTokenId,
+            ClientNonce = payload.ClientNonce,
+            ServerNonce = payload.ServerNonce,
+            IssuedAtUtc = payload.IssuedAtUtc,
+            NotBeforeUtc = payload.NotBeforeUtc,
+            ExpiresAtUtc = payload.ExpiresAtUtc,
+            ServerTimeUtc = payload.ServerTimeUtc,
+            Policy = ClonePolicy(payload.Policy)
+        };
+    }
+
+    private async Task<TPayload> PostAndVerifyPayloadAsync<TPayload>(
+        Uri requestUri,
+        object request,
+        TrustedTimeSnapshot? priorTrustedTimeSnapshot,
+        CancellationToken cancellationToken)
+    {
         using HttpResponseMessage response = await _httpClient.PostAsJsonAsync(requestUri, request, cancellationToken).ConfigureAwait(false);
+        string rawResponse = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
         if (!response.IsSuccessStatusCode)
         {
-            LauncherErrorResponse? error = await response.Content.ReadFromJsonAsync<LauncherErrorResponse>(cancellationToken: cancellationToken).ConfigureAwait(false);
+            LauncherErrorResponse? error = string.IsNullOrWhiteSpace(rawResponse)
+                ? null
+                : JsonSerializer.Deserialize<LauncherErrorResponse>(rawResponse, LauncherLicenseJson.SerializerOptions);
             throw new LicenseValidationException(error?.Error ?? $"License validation failed with status {(int)response.StatusCode}.", response.StatusCode);
         }
 
-        LauncherSessionStartResponse payload = await response.Content.ReadFromJsonAsync<LauncherSessionStartResponse>(cancellationToken: cancellationToken).ConfigureAwait(false)
+        SignedResponseEnvelopeDto envelope = JsonSerializer.Deserialize<SignedResponseEnvelopeDto>(rawResponse, LauncherLicenseJson.SerializerOptions)
             ?? throw new InvalidOperationException("License validation response was empty.");
 
-        return new LicenseSessionInfo
+        if (!string.Equals(envelope.Algorithm, "RS256", StringComparison.Ordinal))
         {
-            LicenseKey = licenseKey,
-            LicenseId = payload.LicenseId,
-            ProductCode = LauncherDefaults.ProductCode,
-            SessionToken = payload.SessionToken,
-            Status = payload.Status,
-            ExpiresAtUtc = payload.ExpiresAt,
-            Policy = new LicensePolicy
-            {
-                MaxDevices = payload.Policy.MaxDevices,
-                HeartbeatMinutes = payload.Policy.HeartbeatMinutes,
-                GraceHours = payload.Policy.GraceHours,
-                ResetAllowance = payload.Policy.ResetAllowance,
-                ResetsUsed = payload.Policy.ResetUsed,
-                OfflineTokenAllowed = payload.Policy.OfflineTokenAllow
-            }
+            throw new LicenseValidationException($"Unexpected signature algorithm '{envelope.Algorithm}'.", response.StatusCode);
+        }
+
+        if (!string.IsNullOrWhiteSpace(_trustSettings.KeyId) &&
+            !string.Equals(envelope.KeyId, _trustSettings.KeyId, StringComparison.Ordinal))
+        {
+            throw new LicenseValidationException($"Unexpected license signing key id '{envelope.KeyId}'.", response.StatusCode);
+        }
+
+        string payloadJson = envelope.Payload.GetRawText();
+        VerifyPayloadSignature(payloadJson, envelope.SignatureBase64);
+        TPayload payload = JsonSerializer.Deserialize<TPayload>(payloadJson, LauncherLicenseJson.SerializerOptions)
+            ?? throw new InvalidOperationException("Signed license payload could not be parsed.");
+
+        DateTimeOffset serverTimeUtc = payload switch
+        {
+            SignedSessionPayload sessionPayload => sessionPayload.ServerTimeUtc,
+            SignedOfflineGrantPayload offlinePayload => offlinePayload.ServerTimeUtc,
+            _ => DateTimeOffset.MinValue
+        };
+
+        LauncherLicenseService.ValidateTrustedTimeWindow(priorTrustedTimeSnapshot, serverTimeUtc);
+        return payload;
+    }
+
+    private void VerifyPayloadSignature(string payloadJson, string signatureBase64)
+    {
+        using RSA rsa = RSA.Create();
+        rsa.ImportFromPem(_trustSettings.SigningPublicKeyPem);
+        byte[] payloadBytes = LauncherLicenseJson.GetPayloadBytes(payloadJson);
+        byte[] signature = Convert.FromBase64String(signatureBase64);
+        bool isValid = rsa.VerifyData(payloadBytes, signature, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
+        if (!isValid)
+        {
+            throw new LicenseValidationException("License signature verification failed.", null);
+        }
+    }
+
+    private static string CreateNonce()
+    {
+        byte[] bytes = RandomNumberGenerator.GetBytes(16);
+        return Convert.ToHexString(bytes);
+    }
+
+    private static void ValidatePayload(SignedSessionPayload payload, string expectedClientNonce, string expectedMachineBinding, List<ReplayCacheEntry> replayCache)
+    {
+        ValidateReplayAndCommonFields(
+            payload.ResponseId,
+            payload.ClientNonce,
+            expectedClientNonce,
+            payload.ProductCode,
+            payload.MachineBinding,
+            expectedMachineBinding,
+            payload.NotBeforeUtc,
+            payload.ExpiresAtUtc,
+            payload.ServerTimeUtc,
+            replayCache);
+
+        if (string.IsNullOrWhiteSpace(payload.SessionToken))
+        {
+            throw new LicenseValidationException("The signed session payload did not include a session token.", null);
+        }
+    }
+
+    private static void ValidatePayload(SignedOfflineGrantPayload payload, string expectedClientNonce, string expectedMachineBinding, List<ReplayCacheEntry> replayCache)
+    {
+        ValidateReplayAndCommonFields(
+            payload.ResponseId,
+            payload.ClientNonce,
+            expectedClientNonce,
+            payload.ProductCode,
+            payload.MachineBinding,
+            expectedMachineBinding,
+            payload.NotBeforeUtc,
+            payload.ExpiresAtUtc,
+            payload.ServerTimeUtc,
+            replayCache);
+
+        if (string.IsNullOrWhiteSpace(payload.OfflineToken))
+        {
+            throw new LicenseValidationException("The signed offline grant did not include an offline token.", null);
+        }
+    }
+
+    private static void ValidateReplayAndCommonFields(
+        string responseId,
+        string actualClientNonce,
+        string expectedClientNonce,
+        string productCode,
+        string actualMachineBinding,
+        string expectedMachineBinding,
+        DateTimeOffset notBeforeUtc,
+        DateTimeOffset expiresAtUtc,
+        DateTimeOffset serverTimeUtc,
+        List<ReplayCacheEntry> replayCache)
+    {
+        if (string.IsNullOrWhiteSpace(responseId))
+        {
+            throw new LicenseValidationException("The signed response is missing a response identifier.", null);
+        }
+
+        if (replayCache.Any(entry => string.Equals(entry.ResponseId, responseId, StringComparison.Ordinal) && entry.ExpiresAtUtc > serverTimeUtc))
+        {
+            throw new LicenseValidationException("A replayed signed response was rejected.", null);
+        }
+
+        if (!string.Equals(actualClientNonce, expectedClientNonce, StringComparison.Ordinal))
+        {
+            throw new LicenseValidationException("The license response nonce did not match the request nonce.", null);
+        }
+
+        if (!string.Equals(productCode, LauncherDefaults.ProductCode, StringComparison.OrdinalIgnoreCase))
+        {
+            throw new LicenseValidationException($"Unexpected product code '{productCode}'.", null);
+        }
+
+        if (!string.Equals(actualMachineBinding, expectedMachineBinding, StringComparison.Ordinal))
+        {
+            throw new LicenseValidationException("The signed license payload was not bound to this machine.", null);
+        }
+
+        if (serverTimeUtc < notBeforeUtc || serverTimeUtc > expiresAtUtc)
+        {
+            throw new LicenseValidationException("The signed license payload is outside its valid time window.", null);
+        }
+    }
+
+    private static LicensePolicy ClonePolicy(LicensePolicy policy)
+    {
+        return new LicensePolicy
+        {
+            MaxDevices = policy.MaxDevices,
+            HeartbeatMinutes = policy.HeartbeatMinutes,
+            GraceHours = policy.GraceHours,
+            ResetAllowance = policy.ResetAllowance,
+            ResetsUsed = policy.ResetsUsed,
+            OfflineTokenAllowed = policy.OfflineTokenAllowed
         };
     }
 }

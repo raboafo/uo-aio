@@ -1,0 +1,63 @@
+<UserControl x:Class="UOAIO.Launcher.Scenes.LicenseGateSceneControl"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             MinWidth="640"
+             MinHeight="420">
+    <Grid Background="#F2F5F9">
+        <Border Width="520"
+                Padding="28"
+                Background="White"
+                BorderBrush="#D9DFE8"
+                BorderThickness="1"
+                CornerRadius="8"
+                HorizontalAlignment="Center"
+                VerticalAlignment="Center">
+            <StackPanel>
+                <TextBlock FontSize="28"
+                           FontWeight="SemiBold"
+                           Text="UO-AIO Launcher" />
+                <TextBlock Margin="0,8,0,0"
+                           Foreground="#5D6673"
+                           TextWrapping="Wrap"
+                           Text="Validate the launcher license before entering the shard workflows." />
+
+                <Border Margin="0,20,0,0"
+                        Padding="16"
+                        Background="#F8FAFC"
+                        BorderBrush="#D9DFE8"
+                        BorderThickness="1">
+                    <StackPanel>
+                        <TextBlock FontSize="18"
+                                   FontWeight="SemiBold"
+                                   Text="License Gate" />
+                        <TextBlock Margin="0,12,0,4"
+                                   Text="License Key" />
+                        <TextBox x:Name="LicenseKeyTextBox" />
+
+                        <StackPanel x:Name="DeveloperOverridePanel"
+                                    Margin="0,12,0,0"
+                                    Visibility="Collapsed">
+                            <TextBlock Text="Debug License Server Override" />
+                            <TextBox x:Name="ServerOverrideTextBox"
+                                     Margin="0,4,0,0" />
+                        </StackPanel>
+
+                        <Button x:Name="ValidateButton"
+                                Margin="0,16,0,0"
+                                Padding="12,8"
+                                Click="ValidateButton_Click"
+                                Content="Validate And Enter" />
+                        <TextBlock x:Name="StatusTextBlock"
+                                   Margin="0,12,0,0"
+                                   Foreground="#444444"
+                                   TextWrapping="Wrap" />
+                        <TextBlock x:Name="EndpointTextBlock"
+                                   Margin="0,12,0,0"
+                                   Foreground="#6A7380"
+                                   TextWrapping="Wrap" />
+                    </StackPanel>
+                </Border>
+            </StackPanel>
+        </Border>
+    </Grid>
+</UserControl>

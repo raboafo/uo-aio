@@ -169,6 +169,12 @@ public sealed class ClientProcessLauncher
 
     private static string GetSessionRootPath()
     {
+        string? overrideRoot = Environment.GetEnvironmentVariable("UOAIO_CLIENT_RUNTIME_ROOT");
+        if (!string.IsNullOrWhiteSpace(overrideRoot))
+        {
+            return Path.Combine(overrideRoot, "sessions");
+        }
+
         string localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
         if (string.IsNullOrWhiteSpace(localAppData))
         {
