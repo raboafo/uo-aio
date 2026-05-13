@@ -1,51 +1,54 @@
 <UserControl x:Class="UOAIO.Launcher.ShardWorkflows.TidesOfPowerWorkflowControl"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
-    <StackPanel>
-        <TextBlock FontSize="18"
-                   FontWeight="SemiBold"
-                   Text="Tides of Power" />
-        <TextBlock Margin="0,8,0,0"
-                   Foreground="#666666"
-                   TextWrapping="Wrap"
-                   Text="Account/password shard profile. The actual client shard behavior is intentionally left as a placeholder for manual implementation." />
+    <Border Padding="18"
+            Style="{StaticResource InsetPanelBorderStyle}">
+        <StackPanel>
+            <TextBlock Style="{StaticResource SectionTitleTextBlockStyle}"
+                       Text="Tides of Power" />
+            <TextBlock Margin="0,8,0,0"
+                       Style="{StaticResource MutedBodyTextBlockStyle}"
+                       TextWrapping="Wrap"
+                       Text="Account/password shard profile. The actual client shard behavior is intentionally left as a placeholder for manual implementation." />
 
-        <TextBlock Margin="0,16,0,4"
-                   Text="Account" />
-        <TextBox x:Name="AccountTextBox" />
+            <TextBlock Margin="0,18,0,6"
+                       Style="{StaticResource FieldLabelTextBlockStyle}"
+                       Text="Account" />
+            <TextBox x:Name="AccountTextBox" />
 
-        <TextBlock Margin="0,12,0,4"
-                   Text="Password" />
-        <PasswordBox x:Name="PasswordInput" />
+            <TextBlock Margin="0,12,0,6"
+                       Style="{StaticResource FieldLabelTextBlockStyle}"
+                       Text="Password" />
+            <PasswordBox x:Name="PasswordInput" />
 
-        <TextBlock Margin="0,12,0,4"
-                   Text="Client asset directory (optional)" />
-        <Grid>
-            <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="*" />
-                <ColumnDefinition Width="Auto" />
-                <ColumnDefinition Width="Auto" />
-            </Grid.ColumnDefinitions>
+            <TextBlock Margin="0,12,0,6"
+                       Style="{StaticResource FieldLabelTextBlockStyle}"
+                       Text="Client asset directory (optional)" />
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
 
-            <TextBox x:Name="AssetDirectoryTextBox"
-                     MinWidth="280" />
-            <Button Grid.Column="1"
-                    Margin="8,0,0,0"
-                    Padding="10,4"
-                    Click="BrowseAssetDirectoryButton_Click"
-                    Content="Browse" />
-            <Button Grid.Column="2"
-                    Margin="8,0,0,0"
-                    Padding="10,4"
-                    Click="ClearAssetDirectoryButton_Click"
-                    Content="Clear" />
-        </Grid>
+                <TextBox x:Name="AssetDirectoryTextBox"
+                         MinWidth="280" />
+                <Button Grid.Column="1"
+                        Margin="8,0,0,0"
+                        Click="BrowseAssetDirectoryButton_Click"
+                        Content="Browse" />
+                <Button Grid.Column="2"
+                        Margin="8,0,0,0"
+                        Click="ClearAssetDirectoryButton_Click"
+                        Content="Clear" />
+            </Grid>
 
-        <Button x:Name="PrepareButton"
-                Margin="0,20,0,0"
-                Padding="12,8"
-                HorizontalAlignment="Left"
-                Click="PrepareButton_Click"
-                Content="Prepare Active Shard State" />
-    </StackPanel>
+            <Button x:Name="PrepareButton"
+                    Margin="0,20,0,0"
+                    HorizontalAlignment="Left"
+                    Click="PrepareButton_Click"
+                    Content="Prepare Active Shard State"
+                    Style="{StaticResource PrimaryButtonStyle}" />
+        </StackPanel>
+    </Border>
 </UserControl>

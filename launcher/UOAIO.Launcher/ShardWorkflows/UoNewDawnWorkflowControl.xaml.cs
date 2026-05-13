@@ -3,7 +3,6 @@ using System.Windows.Controls;
 using System.Windows.Media;
 using UOAIO.Launcher.Core;
 using UOAIO.ShardRuntime;
-using Brushes = System.Windows.Media.Brushes;
 using UserControl = System.Windows.Controls.UserControl;
 
 namespace UOAIO.Launcher.ShardWorkflows;
@@ -200,13 +199,13 @@ public partial class UoNewDawnWorkflowControl : UserControl, IShardWorkflowContr
     private void ShowAuthorizationStatus(string message, bool isError)
     {
         AuthorizationStatusTextBlock.Text = message;
-        AuthorizationStatusTextBlock.Foreground = isError ? Brushes.Firebrick : Brushes.DarkGreen;
+        AuthorizationStatusTextBlock.Foreground = ResolveStatusBrush(isError);
     }
 
     private void ShowAccountStatus(string message, bool isError)
     {
         AccountStageStatusTextBlock.Text = message;
-        AccountStageStatusTextBlock.Foreground = isError ? Brushes.Firebrick : Brushes.DarkGreen;
+        AccountStageStatusTextBlock.Foreground = ResolveStatusBrush(isError);
     }
 
     private void BrowseAssetDirectoryButton_Click(object sender, RoutedEventArgs e)
@@ -221,6 +220,12 @@ public partial class UoNewDawnWorkflowControl : UserControl, IShardWorkflowContr
     private void ClearAssetDirectoryButton_Click(object sender, RoutedEventArgs e)
     {
         AssetDirectoryTextBox.Text = string.Empty;
+    }
+
+    private System.Windows.Media.Brush ResolveStatusBrush(bool isError)
+    {
+        string resourceKey = isError ? "StatusErrorBrush" : "StatusSuccessBrush";
+        return TryFindResource(resourceKey) as System.Windows.Media.Brush ?? System.Windows.Media.Brushes.White;
     }
 
     private static Version? ResolveClientVersion(IReadOnlyDictionary<string, string> metadata, Version? fallback)

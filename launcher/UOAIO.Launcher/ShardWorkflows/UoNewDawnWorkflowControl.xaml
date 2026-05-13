@@ -9,104 +9,107 @@
         </Grid.RowDefinitions>
 
         <StackPanel>
-            <TextBlock FontSize="18"
-                       FontWeight="SemiBold"
+            <TextBlock Style="{StaticResource SectionTitleTextBlockStyle}"
                        Text="UO New Dawn" />
             <TextBlock x:Name="StageTitleTextBlock"
                        Margin="0,8,0,0"
-                       FontWeight="SemiBold"
+                       Style="{StaticResource FieldLabelTextBlockStyle}"
                        Text="Step 1 of 2 - Discord authorization" />
             <TextBlock x:Name="StageDescriptionTextBlock"
                        Margin="0,8,0,0"
-                       Foreground="#666666"
+                       Style="{StaticResource MutedBodyTextBlockStyle}"
                        TextWrapping="Wrap"
                        Text="Authorize the launcher with Discord. After that, choose an account and continue toward client handoff." />
         </StackPanel>
 
         <Grid Grid.Row="1"
               Margin="0,18,0,0">
-            <StackPanel x:Name="AuthorizeStagePanel">
-                <CheckBox x:Name="RefreshTokenCheckBox"
-                          Content="Refresh token"
-                          Checked="RefreshTokenCheckBox_Changed"
-                          Unchecked="RefreshTokenCheckBox_Changed" />
-
-                <Button x:Name="AuthorizeButton"
-                        Margin="0,16,0,0"
-                        Padding="12,8"
-                        HorizontalAlignment="Left"
-                        Click="AuthorizeButton_Click"
-                        Content="Authorize with Discord" />
-
-                <TextBlock x:Name="AuthorizationStatusTextBlock"
-                           Margin="0,10,0,0"
-                           Foreground="#444444"
-                           TextWrapping="Wrap"
-                           Text="Discord authorization is required before continuing." />
-            </StackPanel>
-
-            <StackPanel x:Name="AccountStagePanel"
-                        Visibility="Collapsed">
-                <TextBlock x:Name="AuthorizedIdentityTextBlock"
-                           FontSize="16"
-                           FontWeight="SemiBold"
-                           Text="Authorized user" />
-
-                <TextBlock Margin="0,16,0,4"
-                           Text="Choose account" />
-                <ComboBox x:Name="AccountComboBox"
-                          SelectionChanged="AccountComboBox_SelectionChanged" />
-
-                <TextBlock Margin="0,12,0,4"
-                           Text="Client asset directory (optional)" />
+            <Border Style="{StaticResource InsetPanelBorderStyle}">
                 <Grid>
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="*" />
-                        <ColumnDefinition Width="Auto" />
-                        <ColumnDefinition Width="Auto" />
-                    </Grid.ColumnDefinitions>
+                    <StackPanel x:Name="AuthorizeStagePanel"
+                                Margin="18">
+                        <CheckBox x:Name="RefreshTokenCheckBox"
+                                  Content="Refresh token"
+                                  Checked="RefreshTokenCheckBox_Changed"
+                                  Unchecked="RefreshTokenCheckBox_Changed" />
 
-                    <TextBox x:Name="AssetDirectoryTextBox"
-                             MinWidth="280" />
-                    <Button Grid.Column="1"
-                            Margin="8,0,0,0"
-                            Padding="10,4"
-                            Click="BrowseAssetDirectoryButton_Click"
-                            Content="Browse" />
-                    <Button Grid.Column="2"
-                            Margin="8,0,0,0"
-                            Padding="10,4"
-                            Click="ClearAssetDirectoryButton_Click"
-                            Content="Clear" />
+                        <Button x:Name="AuthorizeButton"
+                                Margin="0,16,0,0"
+                                HorizontalAlignment="Left"
+                                Click="AuthorizeButton_Click"
+                                Content="Authorize with Discord"
+                                Style="{StaticResource PrimaryButtonStyle}" />
+
+                        <TextBlock x:Name="AuthorizationStatusTextBlock"
+                                   Margin="0,12,0,0"
+                                   Style="{StaticResource StatusTextBlockStyle}"
+                                   TextWrapping="Wrap"
+                                   Text="Discord authorization is required before continuing." />
+                    </StackPanel>
+
+                    <StackPanel x:Name="AccountStagePanel"
+                                Margin="18"
+                                Visibility="Collapsed">
+                        <TextBlock x:Name="AuthorizedIdentityTextBlock"
+                                   Style="{StaticResource SectionTitleTextBlockStyle}"
+                                   Text="Authorized user" />
+
+                        <TextBlock Margin="0,16,0,6"
+                                   Style="{StaticResource FieldLabelTextBlockStyle}"
+                                   Text="Choose account" />
+                        <ComboBox x:Name="AccountComboBox"
+                                  SelectionChanged="AccountComboBox_SelectionChanged" />
+
+                        <TextBlock Margin="0,14,0,6"
+                                   Style="{StaticResource FieldLabelTextBlockStyle}"
+                                   Text="Client asset directory (optional)" />
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+
+                            <TextBox x:Name="AssetDirectoryTextBox"
+                                     MinWidth="280" />
+                            <Button Grid.Column="1"
+                                    Margin="8,0,0,0"
+                                    Click="BrowseAssetDirectoryButton_Click"
+                                    Content="Browse" />
+                            <Button Grid.Column="2"
+                                    Margin="8,0,0,0"
+                                    Click="ClearAssetDirectoryButton_Click"
+                                    Content="Clear" />
+                        </Grid>
+
+                        <TextBlock x:Name="AccountStageStatusTextBlock"
+                                   Margin="0,12,0,0"
+                                   Style="{StaticResource StatusTextBlockStyle}"
+                                   TextWrapping="Wrap"
+                                   Text="Choose the account that should be handed off to the client." />
+
+                        <Button x:Name="PlayButton"
+                                Margin="0,20,0,0"
+                                HorizontalAlignment="Left"
+                                Click="PlayButton_Click"
+                                Content="Play"
+                                Style="{StaticResource PrimaryButtonStyle}" />
+                    </StackPanel>
                 </Grid>
-
-                <TextBlock x:Name="AccountStageStatusTextBlock"
-                           Margin="0,12,0,0"
-                           Foreground="#444444"
-                           TextWrapping="Wrap"
-                           Text="Choose the account that should be handed off to the client." />
-
-                <Button x:Name="PlayButton"
-                        Margin="0,20,0,0"
-                        Padding="12,8"
-                        HorizontalAlignment="Left"
-                        Click="PlayButton_Click"
-                        Content="Play" />
-            </StackPanel>
+            </Border>
         </Grid>
 
         <StackPanel Grid.Row="2"
                     Margin="0,18,0,0"
                     Orientation="Horizontal">
             <Button x:Name="BackButton"
-                    Padding="12,8"
                     Click="BackButton_Click"
                     Content="Back" />
             <Button x:Name="ContinueButton"
                     Margin="12,0,0,0"
-                    Padding="12,8"
                     Click="ContinueButton_Click"
-                    Content="Continue" />
+                    Content="Continue"
+                    Style="{StaticResource PrimaryButtonStyle}" />
         </StackPanel>
     </Grid>
 </UserControl>

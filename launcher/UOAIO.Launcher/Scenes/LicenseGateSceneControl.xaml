@@ -3,57 +3,66 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              MinWidth="640"
              MinHeight="420">
-    <Grid Background="#F2F5F9">
-        <Border Width="520"
-                Padding="28"
-                Background="White"
-                BorderBrush="#D9DFE8"
-                BorderThickness="1"
-                CornerRadius="8"
-                HorizontalAlignment="Center"
-                VerticalAlignment="Center">
+    <Grid Background="Transparent">
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="*" />
+            <ColumnDefinition Width="560" />
+            <ColumnDefinition Width="*" />
+        </Grid.ColumnDefinitions>
+
+        <Border Grid.Column="1"
+                MaxWidth="560"
+                Padding="32"
+                HorizontalAlignment="Stretch"
+                VerticalAlignment="Center"
+                Style="{StaticResource SceneCardBorderStyle}">
             <StackPanel>
-                <TextBlock FontSize="28"
-                           FontWeight="SemiBold"
+                <TextBlock Style="{StaticResource EyebrowTextBlockStyle}"
+                           Text="LICENSED ENTRY" />
+                <TextBlock Margin="0,10,0,0"
+                           Style="{StaticResource HeroTitleTextBlockStyle}"
                            Text="UO-AIO Launcher" />
-                <TextBlock Margin="0,8,0,0"
-                           Foreground="#5D6673"
+                <TextBlock Margin="0,14,0,0"
+                           Style="{StaticResource MutedBodyTextBlockStyle}"
                            TextWrapping="Wrap"
                            Text="Validate the launcher license before entering the shard workflows." />
 
-                <Border Margin="0,20,0,0"
-                        Padding="16"
-                        Background="#F8FAFC"
-                        BorderBrush="#D9DFE8"
-                        BorderThickness="1">
+                <Border Margin="0,28,0,0"
+                        Padding="22"
+                        Style="{StaticResource InsetPanelBorderStyle}">
                     <StackPanel>
-                        <TextBlock FontSize="18"
-                                   FontWeight="SemiBold"
+                        <TextBlock Style="{StaticResource SectionTitleTextBlockStyle}"
                                    Text="License Gate" />
-                        <TextBlock Margin="0,12,0,4"
-                                   Text="License Key" />
-                        <TextBox x:Name="LicenseKeyTextBox" />
+                        <StackPanel x:Name="LicenseEntryPanel"
+                                    Margin="0,18,0,0">
+                            <TextBlock Style="{StaticResource FieldLabelTextBlockStyle}"
+                                       Text="License Key" />
+                            <TextBox x:Name="LicenseKeyTextBox"
+                                     Margin="0,6,0,0" />
 
-                        <StackPanel x:Name="DeveloperOverridePanel"
-                                    Margin="0,12,0,0"
-                                    Visibility="Collapsed">
-                            <TextBlock Text="Debug License Server Override" />
-                            <TextBox x:Name="ServerOverrideTextBox"
-                                     Margin="0,4,0,0" />
+                            <StackPanel x:Name="DeveloperOverridePanel"
+                                        Margin="0,14,0,0"
+                                        Visibility="Collapsed">
+                                <TextBlock Style="{StaticResource FieldLabelTextBlockStyle}"
+                                           Text="Debug License Server Override" />
+                                <TextBox x:Name="ServerOverrideTextBox"
+                                         Margin="0,6,0,0" />
+                            </StackPanel>
+
+                            <Button x:Name="ValidateButton"
+                                    Margin="0,20,0,0"
+                                    Click="ValidateButton_Click"
+                                    Content="Validate And Enter"
+                                    Style="{StaticResource PrimaryButtonStyle}" />
                         </StackPanel>
 
-                        <Button x:Name="ValidateButton"
-                                Margin="0,16,0,0"
-                                Padding="12,8"
-                                Click="ValidateButton_Click"
-                                Content="Validate And Enter" />
                         <TextBlock x:Name="StatusTextBlock"
-                                   Margin="0,12,0,0"
-                                   Foreground="#444444"
+                                   Margin="0,14,0,0"
+                                   Style="{StaticResource StatusTextBlockStyle}"
                                    TextWrapping="Wrap" />
                         <TextBlock x:Name="EndpointTextBlock"
                                    Margin="0,12,0,0"
-                                   Foreground="#6A7380"
+                                   Style="{StaticResource CaptionTextBlockStyle}"
                                    TextWrapping="Wrap" />
                     </StackPanel>
                 </Border>

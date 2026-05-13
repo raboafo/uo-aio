@@ -1,9 +1,10 @@
 using System.Text.Json;
+using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Media;
 using UOAIO.Launcher.Core;
 using UOAIO.Launcher.ShardWorkflows;
 using UOAIO.ShardRuntime;
-using Brushes = System.Windows.Media.Brushes;
 using UserControl = System.Windows.Controls.UserControl;
 
 namespace UOAIO.Launcher.Scenes;
@@ -95,6 +96,7 @@ public partial class MainLauncherSceneControl : UserControl
             _isInitializing = false;
         }
 
+        SyncSelectedShardView();
         UpdateLicenseBanner(licenseState);
     }
 
@@ -118,21 +120,7 @@ public partial class MainLauncherSceneControl : UserControl
             return;
         }
 
-        if (ShardListBox.SelectedItem is not ShardDefinition shard)
-        {
-            SelectedShardNameTextBlock.Text = "No shard selected";
-            SelectedShardDescriptionTextBlock.Text = string.Empty;
-            SelectedShardEndpointTextBlock.Text = string.Empty;
-            ShardWorkflowContentControl.Content = null;
-            ShowSaveStatus(string.Empty, isError: false);
-            return;
-        }
-
-        SelectedShardNameTextBlock.Text = shard.Name;
-        SelectedShardDescriptionTextBlock.Text = shard.Description;
-        SelectedShardEndpointTextBlock.Text = $"{shard.Host}:{shard.ServerPort}";
-        ShowSaveStatus(string.Empty, isError: false);
-        LoadShardWorkflow(shard);
+        SyncSelectedShardView();
     }
 
     private void LoadShardWorkflow(ShardDefinition shard)
@@ -162,7 +150,7 @@ public partial class MainLauncherSceneControl : UserControl
         }
         catch (Exception ex)
         {
-            ShardWorkflowContentControl.Content = null;
+            ShardWorkflowContentControl.Content = CreateWorkflowErrorContent(ex.Message);
             ShowSaveStatus($"Unable to load shard workflow: {ex.Message}", true);
         }
     }
@@ -227,6 +215,59 @@ public partial class MainLauncherSceneControl : UserControl
     private void ShowSaveStatus(string message, bool isError)
     {
         SaveStatusTextBlock.Text = message;
-        SaveStatusTextBlock.Foreground = isError ? Brushes.Firebrick : Brushes.DarkGreen;
+        SaveStatusTextBlock.Foreground = ResolveStatusBrush(isError ? "StatusErrorBrush" : "StatusSuccessBrush");
+    }
+
+    private void SyncSelectedShardView()
+    {
+        if (ShardListBox.SelectedItem is not ShardDefinition shard)
+        {
+            SelectedShardNameTextBlock.Text = "No shard selected";
+            SelectedShardDescriptionTextBlock.Text = string.Empty;
+            SelectedShardEndpointTextBlock.Text = string.Empty;
+            ShardWorkflowContentControl.Content = null;
+            ShowSaveStatus(string.Empty, isError: false);
+            return;
+        }
+
+        SelectedShardNameTextBlock.Text = shard.Name;
+        SelectedShardDescriptionTextBlock.Text = shard.Description;
+        SelectedShardEndpointTextBlock.Text = $"{shard.Host}:{shard.ServerPort}";
+        ShowSaveStatus(string.Empty, isError: false);
+        LoadShardWorkflow(shard);
+    }
+
+    private System.Windows.Media.Brush ResolveStatusBrush(string resourceKey)
+    {
+        return TryFindResource(resourceKey) as System.Windows.Media.Brush ?? System.Windows.Media.Brushes.White;
+    }
+
+    private FrameworkElement CreateWorkflowErrorContent(string message)
+    {
+        TextBlock body = new()
+        {
+            Text = $"Unable to load shard workflow: {message}",
+            TextWrapping = TextWrapping.Wrap,
+            Foreground = ResolveStatusBrush("StatusErrorBrush"),
+            Margin = new Thickness(0, 6, 0, 0)
+        };
+
+        if (TryFindResource("MutedBodyTextBlockStyle") is Style bodyStyle)
+        {
+            body.Style = bodyStyle;
+        }
+
+        Border border = new()
+        {
+            Padding = new Thickness(18),
+            Child = body
+        };
+
+        if (TryFindResource("InsetPanelBorderStyle") is Style borderStyle)
+        {
+            border.Style = borderStyle;
+        }
+
+        return border;
     }
 }

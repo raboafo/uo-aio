@@ -1,5 +1,6 @@
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Media;
 using UOAIO.Launcher.Core;
 using UserControl = System.Windows.Controls.UserControl;
 
@@ -30,9 +31,7 @@ public partial class LicenseGateSceneControl : UserControl
         LicenseKeyTextBox.Text = gateState.RecoveredLicenseKey ?? string.Empty;
         ServerOverrideTextBox.Text = launcherState.DeveloperLicenseServerUrlOverride ?? string.Empty;
         StatusTextBlock.Text = gateState.StatusMessage;
-        StatusTextBlock.Foreground = gateState.CanEnterLauncher
-            ? System.Windows.Media.Brushes.DarkGreen
-            : System.Windows.Media.Brushes.Firebrick;
+        StatusTextBlock.Foreground = ResolveStatusBrush(gateState.CanEnterLauncher ? "StatusSuccessBrush" : "StatusErrorBrush");
         EndpointTextBlock.Text = string.IsNullOrWhiteSpace(gateState.EffectiveServerUrl)
             ? string.Empty
             : $"Endpoint: {gateState.EffectiveServerUrl}";
@@ -43,6 +42,11 @@ public partial class LicenseGateSceneControl : UserControl
         ValidateButton.IsEnabled = !isBusy;
     }
 
+    public void SetLicenseEntryVisible(bool isVisible)
+    {
+        LicenseEntryPanel.Visibility = isVisible ? Visibility.Visible : Visibility.Collapsed;
+    }
+
     private void ValidateButton_Click(object sender, RoutedEventArgs e)
     {
         ValidateRequested?.Invoke(this, new LicenseValidationRequestedEventArgs
@@ -50,5 +54,10 @@ public partial class LicenseGateSceneControl : UserControl
             LicenseKey = LicenseKeyTextBox.Text.Trim(),
             DeveloperServerOverride = ServerOverrideTextBox.Text.Trim()
         });
+    }
+
+    private System.Windows.Media.Brush ResolveStatusBrush(string resourceKey)
+    {
+        return TryFindResource(resourceKey) as System.Windows.Media.Brush ?? System.Windows.Media.Brushes.White;
     }
 }

@@ -1,0 +1,85 @@
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <FontFamily x:Key="LauncherBrandFont">pack://application:,,,/Assets/#MasonSerif</FontFamily>
+    <FontFamily x:Key="LauncherMonospaceFont">Consolas</FontFamily>
+
+    <CornerRadius x:Key="SmallCornerRadius">6</CornerRadius>
+    <CornerRadius x:Key="MediumCornerRadius">10</CornerRadius>
+    <CornerRadius x:Key="LargeCornerRadius">14</CornerRadius>
+
+    <Thickness x:Key="ControlBorderThickness">1</Thickness>
+    <Thickness x:Key="ControlPadding">14,9</Thickness>
+
+    <Color x:Key="WindowScrimTopColor">#8C0D0A08</Color>
+    <Color x:Key="WindowScrimBottomColor">#D91A1410</Color>
+    <Color x:Key="WindowAtmosphereStartColor">#26000000</Color>
+    <Color x:Key="WindowAtmosphereEndColor">#40784C13</Color>
+
+    <Color x:Key="SurfaceStrongColor">#D9191513</Color>
+    <Color x:Key="SurfaceSoftColor">#B31C1815</Color>
+    <Color x:Key="SurfaceInsetColor">#CC120F0D</Color>
+    <Color x:Key="SurfaceHighlightColor">#331F1A16</Color>
+    <Color x:Key="InputBackgroundColor">#BF14110F</Color>
+    <Color x:Key="InputReadOnlyColor">#99110E0C</Color>
+    <Color x:Key="DisabledSurfaceColor">#66201B17</Color>
+
+    <Color x:Key="BorderSoftColor">#66B99A70</Color>
+    <Color x:Key="BorderStrongColor">#A6D1B58A</Color>
+    <Color x:Key="BorderFocusColor">#FFE9CA8B</Color>
+
+    <Color x:Key="TextPrimaryColor">#FFF2E8D6</Color>
+    <Color x:Key="TextSecondaryColor">#FFD3C3A8</Color>
+    <Color x:Key="TextMutedColor">#FFAA997E</Color>
+    <Color x:Key="TextDisabledColor">#807D715E</Color>
+
+    <Color x:Key="AccentColor">#FFE0BA76</Color>
+    <Color x:Key="AccentHoverColor">#FFF0CB8B</Color>
+    <Color x:Key="AccentPressedColor">#FFC9984B</Color>
+    <Color x:Key="AccentSubtleColor">#33E0BA76</Color>
+
+    <Color x:Key="SuccessColor">#FF9AC7A3</Color>
+    <Color x:Key="ErrorColor">#FFD98B76</Color>
+    <Color x:Key="InfoColor">#FFCDB390</Color>
+
+    <SolidColorBrush x:Key="SurfaceStrongBrush" Color="{StaticResource SurfaceStrongColor}" />
+    <SolidColorBrush x:Key="SurfaceSoftBrush" Color="{StaticResource SurfaceSoftColor}" />
+    <SolidColorBrush x:Key="SurfaceInsetBrush" Color="{StaticResource SurfaceInsetColor}" />
+    <SolidColorBrush x:Key="SurfaceHighlightBrush" Color="{StaticResource SurfaceHighlightColor}" />
+    <SolidColorBrush x:Key="InputBackgroundBrush" Color="{StaticResource InputBackgroundColor}" />
+    <SolidColorBrush x:Key="InputReadOnlyBrush" Color="{StaticResource InputReadOnlyColor}" />
+    <SolidColorBrush x:Key="DisabledSurfaceBrush" Color="{StaticResource DisabledSurfaceColor}" />
+
+    <SolidColorBrush x:Key="BorderSoftBrush" Color="{StaticResource BorderSoftColor}" />
+    <SolidColorBrush x:Key="BorderStrongBrush" Color="{StaticResource BorderStrongColor}" />
+    <SolidColorBrush x:Key="BorderFocusBrush" Color="{StaticResource BorderFocusColor}" />
+
+    <SolidColorBrush x:Key="TextPrimaryBrush" Color="{StaticResource TextPrimaryColor}" />
+    <SolidColorBrush x:Key="TextSecondaryBrush" Color="{StaticResource TextSecondaryColor}" />
+    <SolidColorBrush x:Key="TextMutedBrush" Color="{StaticResource TextMutedColor}" />
+    <SolidColorBrush x:Key="TextDisabledBrush" Color="{StaticResource TextDisabledColor}" />
+
+    <SolidColorBrush x:Key="AccentBrush" Color="{StaticResource AccentColor}" />
+    <SolidColorBrush x:Key="AccentHoverBrush" Color="{StaticResource AccentHoverColor}" />
+    <SolidColorBrush x:Key="AccentPressedBrush" Color="{StaticResource AccentPressedColor}" />
+    <SolidColorBrush x:Key="AccentSubtleBrush" Color="{StaticResource AccentSubtleColor}" />
+
+    <SolidColorBrush x:Key="StatusSuccessBrush" Color="{StaticResource SuccessColor}" />
+    <SolidColorBrush x:Key="StatusErrorBrush" Color="{StaticResource ErrorColor}" />
+    <SolidColorBrush x:Key="StatusInfoBrush" Color="{StaticResource InfoColor}" />
+
+    <LinearGradientBrush x:Key="WindowBackgroundScrimBrush"
+                         StartPoint="0,0"
+                         EndPoint="0,1">
+        <GradientStop Color="{StaticResource WindowScrimTopColor}" Offset="0" />
+        <GradientStop Color="{StaticResource WindowScrimBottomColor}" Offset="1" />
+    </LinearGradientBrush>
+
+    <RadialGradientBrush x:Key="WindowAtmosphereBrush"
+                         Center="0.75,0.45"
+                         GradientOrigin="0.75,0.45"
+                         RadiusX="0.6"
+                         RadiusY="0.6">
+        <GradientStop Color="{StaticResource WindowAtmosphereEndColor}" Offset="0" />
+        <GradientStop Color="{StaticResource WindowAtmosphereStartColor}" Offset="1" />
+    </RadialGradientBrush>
+</ResourceDictionary>

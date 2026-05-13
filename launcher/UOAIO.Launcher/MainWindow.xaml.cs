@@ -1,3 +1,4 @@
+using System.IO;
 using System.Net.Http;
 using System.Windows;
 using System.Windows.Threading;
@@ -38,6 +39,7 @@ public partial class MainWindow : Window
         _shardStateStore = new ShardDefinitionStateStore(_paths);
         _secretStore = new ProtectedLicenseSecretStore(_paths);
         _state = await _stateStore.LoadAsync();
+        bool hasStoredLicense = File.Exists(_paths.ProtectedLicenseSecretsPath);
 
         LicenseTrustSettings trustSettings = new()
         {
@@ -48,9 +50,29 @@ public partial class MainWindow : Window
 
         _licenseGateScene = new LicenseGateSceneControl();
         _licenseGateScene.ValidateRequested += LicenseGateScene_ValidateRequested;
+        _licenseGateScene.SetState(new LicenseGateState
+        {
+            AccessMode = LicenseAccessMode.Unlicensed,
+            StatusMessage = hasStoredLicense
+                ? "Just a sec.."
+                : "Enter a license key before validating."
+        }, _state);
+        _licenseGateScene.SetLicenseEntryVisible(!hasStoredLicense);
+        _licenseGateScene.SetBusy(hasStoredLicense);
+        SceneHost.Content = _licenseGateScene;
 
-        LicenseGateState gateState = await _licenseService.InitializeAsync(_state).ConfigureAwait(true);
-        await ShowSceneAsync(gateState).ConfigureAwait(true);
+        try
+        {
+            LicenseGateState gateState = await _licenseService.InitializeAsync(_state).ConfigureAwait(true);
+            await ShowSceneAsync(gateState).ConfigureAwait(true);
+        }
+        finally
+        {
+            if (SceneHost.Content == _licenseGateScene)
+            {
+                _licenseGateScene.SetBusy(false);
+            }
+        }
     }
 
     private async void LicenseGateScene_ValidateRequested(object? sender, LicenseValidationRequestedEventArgs e)
@@ -111,13 +133,13 @@ public partial class MainWindow : Window
         if (gateState.CanEnterLauncher)
         {
             _mainLauncherScene ??= new MainLauncherSceneControl();
+            SceneHost.Content = _mainLauncherScene;
             if (_paths is not null && _stateStore is not null && _shardStateStore is not null)
             {
                 await _mainLauncherScene.InitializeAsync(_paths, _stateStore, _shardStateStore, _state, gateState).ConfigureAwait(true);
                 _mainLauncherScene.UpdateLicenseBanner(gateState);
             }
 
-            SceneHost.Content = _mainLauncherScene;
             ConfigureHeartbeat(gateState);
             return;
         }
@@ -126,7 +148,9 @@ public partial class MainWindow : Window
         _licenseGateScene ??= new LicenseGateSceneControl();
         _licenseGateScene.ValidateRequested -= LicenseGateScene_ValidateRequested;
         _licenseGateScene.ValidateRequested += LicenseGateScene_ValidateRequested;
+        _licenseGateScene.SetLicenseEntryVisible(true);
         _licenseGateScene.SetState(gateState, _state);
+        _licenseGateScene.SetBusy(false);
         SceneHost.Content = _licenseGateScene;
     }
 
