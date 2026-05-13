@@ -2905,6 +2905,7 @@ public class PacketHandlers
 			{
 				Engine.m_Highlight = null;
 			}
+			player.Paperdoll?.OnAgentUpdated();
 		}
 		Gumps.Invalidate();
 		Engine.Redraw();

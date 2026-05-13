@@ -20,6 +20,8 @@ public class GPaperdoll : GDragable, IContainerView, IAgentView
 
 	private GLabel _titleLabel;
 
+	private GButton _warmodeButton;
+
 	public PaperdollBody Body
 	{
 		get
@@ -86,6 +88,15 @@ public class GPaperdoll : GDragable, IContainerView, IAgentView
 		set
 		{
 			this._titleLabel.Text = value;
+		}
+	}
+
+	public GButton WarmodeButton
+	{
+		set
+		{
+			this._warmodeButton = value;
+			this.RefreshWarmodeButton();
 		}
 	}
 
@@ -275,10 +286,20 @@ public class GPaperdoll : GDragable, IContainerView, IAgentView
 		return paperdoll.Compare(left, right);
 	}
 
+	private void RefreshWarmodeButton()
+	{
+		if (this._warmodeButton != null)
+		{
+			int gumpID = (Engine.Warmode ? 2024 : 2021);
+			this._warmodeButton.SetGumpID(gumpID);
+		}
+	}
+
 	public void OnAgentUpdated()
 	{
 		this.Mode = (this.m_Mobile.Player ? PaperdollMode.Extended : PaperdollMode.Compact);
 		this.Body = PaperdollBody.FromMobile(this.m_Mobile);
+		this.RefreshWarmodeButton();
 	}
 
 	public void OnAgentDeleted()

@@ -1318,6 +1318,7 @@ public sealed class Gumps
 				array4[i].Enabled = array[i] != null;
 				gPaperdoll.Children.Add(array4[i]);
 			}
+			gPaperdoll.WarmodeButton = array4[6];
 		}
 		else
 		{
