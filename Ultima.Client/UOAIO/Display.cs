@@ -218,12 +218,13 @@ public class Display : Form
 		System.ComponentModel.ComponentResourceManager resources = new System.ComponentModel.ComponentResourceManager(typeof(UOAIO.Display));
 		base.SuspendLayout();
 		this.BackColor = System.Drawing.Color.Black;
-		base.ClientSize = new System.Drawing.Size(640, 480);
+		base.ClientSize = new System.Drawing.Size(Engine.MinimumGameWidth + Engine.GameBorderSize * 2, Engine.MinimumGameHeight + Engine.GameBorderSize * 2);
 		this.ForeColor = System.Drawing.SystemColors.ControlText;
 		// base.Icon = (System.Drawing.Icon)resources.GetObject("$this.Icon");
 		base.Name = "Display";
 		base.SizeGripStyle = System.Windows.Forms.SizeGripStyle.Hide;
 		base.StartPosition = System.Windows.Forms.FormStartPosition.Manual;
+		base.MinimumSize = base.SizeFromClientSize(new System.Drawing.Size(Engine.MinimumGameWidth + Engine.GameBorderSize * 2, Engine.MinimumGameHeight + Engine.GameBorderSize * 2));
 		this.Text = "Ultima Online";
 		base.ResumeLayout(false);
 	}

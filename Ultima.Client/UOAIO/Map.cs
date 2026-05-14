@@ -1000,6 +1000,57 @@ public class Map
 		return Map.m_Cached;
 	}
 
+	private static void EnsureCellPoolCapacity(int width, int height)
+	{
+		if (Map.m_CellPool == null || Map.m_CellPool.GetLength(0) < width || Map.m_CellPool.GetLength(1) < height)
+		{
+			Map.m_CellPool = new List<ICell>[width, height];
+			for (int i = 0; i < width; i++)
+			{
+				for (int j = 0; j < height; j++)
+				{
+					Map.m_CellPool[i, j] = new List<ICell>(4);
+				}
+			}
+			return;
+		}
+		int length = Map.m_CellPool.GetLength(0);
+		int length2 = Map.m_CellPool.GetLength(1);
+		for (int k = 0; k < length; k++)
+		{
+			for (int l = 0; l < length2; l++)
+			{
+				List<ICell> list = Map.m_CellPool[k, l];
+				for (int m = 0; m < list.Count; m++)
+				{
+					if (list[m] is IAgentCell agentCell)
+					{
+						agentCell.Owner = null;
+					}
+				}
+				list.Clear();
+			}
+		}
+	}
+
+	private static void EnsureLandTilePoolCapacity(int width, int height)
+	{
+		if (Map.m_LandTiles != null && Map.m_LandTiles.GetLength(0) >= width && Map.m_LandTiles.GetLength(1) >= height)
+		{
+			return;
+		}
+		Map.m_LandTiles = new LandTile[width, height];
+		for (int i = 0; i < width; i++)
+		{
+			for (int j = 0; j < height; j++)
+			{
+				Map.m_LandTiles[i, j] = new LandTile();
+				Map.m_LandTiles[i, j].x = i;
+				Map.m_LandTiles[i, j].y = j;
+			}
+		}
+	}
+
 	public static MapPackage GetMap(int X, int Y, int W, int H)
 	{
 		if (Map.m_X == X && Map.m_Y == Y && Map.m_Width == W && Map.m_Height == H && Map.m_World == Engine.m_World && Map.m_IsCached && !Map.m_QueueInvalidate)
@@ -1032,59 +1083,19 @@ public class Map
 		Map.m_Width = W;
 		Map.m_Height = H;
 		Map.m_World = Engine.m_World;
-		if (Map.m_StrongReferences == null)
+		if (Map.m_StrongReferences == null || Map.m_StrongReferences.Length < W * H)
 		{
 			Map.m_StrongReferences = new MapBlock[W * H];
 		}
 		int num = W << 3;
 		int num2 = H << 3;
-		if (Map.m_CellPool == null)
-		{
-			Map.m_CellPool = new List<ICell>[num, num2];
-			for (int l = 0; l < num; l++)
-			{
-				for (int m = 0; m < num2; m++)
-				{
-					Map.m_CellPool[l, m] = new List<ICell>(4);
-				}
-			}
-		}
-		else
-		{
-			for (int n = 0; n < num; n++)
-			{
-				for (int num3 = 0; num3 < num2; num3++)
-				{
-					List<ICell> list2 = Map.m_CellPool[n, num3];
-					for (int num4 = 0; num4 < list2.Count; num4++)
-					{
-						if (list2[num4] is IAgentCell agentCell)
-						{
-							agentCell.Owner = null;
-						}
-					}
-					list2.Clear();
-				}
-			}
-		}
-		if (Map.m_LandTiles == null)
-		{
-			Map.m_LandTiles = new LandTile[num, num2];
-			for (int num5 = 0; num5 < num; num5++)
-			{
-				for (int num6 = 0; num6 < num2; num6++)
-				{
-					Map.m_LandTiles[num5, num6] = new LandTile();
-					Map.m_LandTiles[num5, num6].x = num5;
-					Map.m_LandTiles[num5, num6].y = num6;
-				}
-			}
-		}
-		if (Map.m_IndexPool == null)
+		Map.EnsureCellPoolCapacity(num, num2);
+		Map.EnsureLandTilePoolCapacity(num, num2);
+		if (Map.m_IndexPool == null || Map.m_IndexPool.GetLength(0) < num || Map.m_IndexPool.GetLength(1) < num2)
 		{
 			Map.m_IndexPool = new byte[num, num2];
 		}
-		if (Map.m_FlagPool == null)
+		if (Map.m_FlagPool == null || Map.m_FlagPool.GetLength(0) < num || Map.m_FlagPool.GetLength(1) < num2)
 		{
 			Map.m_FlagPool = new byte[num, num2];
 		}

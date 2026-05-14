@@ -56,14 +56,6 @@ public class ResizeGameScreenSetting : IVisualizableSetting
 		{
 			Preferences.Current.Options.AlwaysLight = false;
 		}
-		Gump[] array = Gumps.Desktop.Children.ToArray();
-		foreach (Gump gump in array)
-		{
-			if (gump is GSpellPlaceholder)
-			{
-				Gumps.Desktop.Children.Remove(gump);
-			}
-		}
 		Preferences.Current.Layout.Maximized = true;
 		Screen screen = Screen.FromControl(Engine.m_Display);
 		Rectangle workingArea = screen.WorkingArea;
@@ -86,29 +78,7 @@ public class ResizeGameScreenSetting : IVisualizableSetting
 		Preferences.Current.Layout.Apply(applyGumps: false);
 		Preferences.Current.Layout.Update();
 		Preferences.Current.Options.AlwaysLight = true;
-		int gameWidth = Engine.GameWidth;
-		int gameHeight = Engine.GameHeight;
-		int num = gameWidth / 48;
-		int num2 = gameHeight / 48;
-		int num3 = num * 48 - 4;
-		int num4 = num2 * 48 - 4;
-		int num5 = (gameWidth - num3) / 2;
-		int num6 = (gameHeight - num4) / 2;
-		for (int j = 0; j < num; j++)
-		{
-			Gumps.Desktop.Children.Add(new GSpellPlaceholder(num5 + j * 48, -54));
-			Gumps.Desktop.Children.Add(new GSpellPlaceholder(num5 + j * 48, gameHeight + 6 + 4));
-		}
-		for (int k = 0; k < num2; k++)
-		{
-			Gumps.Desktop.Children.Add(new GSpellPlaceholder(-54, num6 + k * 48));
-			Gumps.Desktop.Children.Add(new GSpellPlaceholder(gameWidth + 6 + 4, num6 + k * 48));
-		}
-		Gumps.Desktop.Children.Add(new GSpellPlaceholder(-54, -54));
-		Gumps.Desktop.Children.Add(new GSpellPlaceholder(gameWidth + 6 + 4, -54));
-		Gumps.Desktop.Children.Add(new GSpellPlaceholder(-54, gameHeight + 6 + 4));
-		Gumps.Desktop.Children.Add(new GSpellPlaceholder(gameWidth + 6 + 4, gameHeight + 6 + 4));
-		Gumps.Desktop.Children.Add(new GDesktopBorder());
+		Engine.RebuildViewportChrome();
 		Preferences.Current.Layout.Gumps = gumps;
 		UOAIO.Profiles.Config.Current.Save();
 		UOAIO.Profiles.Config.Current.Load();

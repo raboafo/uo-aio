@@ -230,10 +230,7 @@ public class ScreenLayout : PersistableObject
 				display.Location = new Point(this.m_ScreenBounds.X - frameBorderSize.Width, this.m_ScreenBounds.Y - frameBorderSize.Height - captionHeight);
 				display.ClientSize = this.m_ScreenBounds.Size;
 			}
-			int num = this.m_GameBounds.Width * this.m_GameBounds.Height;
-			int num2 = (Renderer.blockHeight = (Renderer.blockWidth = ((num >= 1920000) ? 11 : ((num >= 1310720) ? 9 : ((num >= 480000) ? 7 : ((num < 307200) ? 3 : 5))))));
-			Renderer.cellWidth = num2 << 3;
-			Renderer.cellHeight = num2 << 3;
+			Engine.UpdateViewportRenderMetrics(this.m_GameBounds.Width, this.m_GameBounds.Height);
 			if (!applyGumps)
 			{
 				return;

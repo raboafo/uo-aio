@@ -142,6 +142,25 @@ public class Engine
 
 	public static int GameHeight;
 
+	public const int MinimumGameWidth = 640;
+
+	public const int MinimumGameHeight = 480;
+
+	public const int GameBorderSize = 4;
+
+	internal struct ViewportRenderMetrics
+	{
+		public int BlockWidth;
+
+		public int BlockHeight;
+
+		public int CellWidth;
+
+		public int CellHeight;
+	}
+
+	private const int MouseRunThresholdPixels = MinimumGameWidth / 6;
+
 	public static int GameX;
 
 	public static int GameY;
@@ -734,29 +753,7 @@ public class Engine
 	public static void ClearScreen()
 	{
 		Gumps.Desktop.Children.Clear();
-		int gameWidth = Engine.GameWidth;
-		int gameHeight = Engine.GameHeight;
-		int num = gameWidth / 48;
-		int num2 = gameHeight / 48;
-		int num3 = num * 48 - 4;
-		int num4 = num2 * 48 - 4;
-		int num5 = (gameWidth - num3) / 2;
-		int num6 = (gameHeight - num4) / 2;
-		for (int i = 0; i < num; i++)
-		{
-			Gumps.Desktop.Children.Add(new GSpellPlaceholder(num5 + i * 48, -54));
-			Gumps.Desktop.Children.Add(new GSpellPlaceholder(num5 + i * 48, gameHeight + 6 + 4));
-		}
-		for (int j = 0; j < num2; j++)
-		{
-			Gumps.Desktop.Children.Add(new GSpellPlaceholder(-54, num6 + j * 48));
-			Gumps.Desktop.Children.Add(new GSpellPlaceholder(gameWidth + 6 + 4, num6 + j * 48));
-		}
-		Gumps.Desktop.Children.Add(new GSpellPlaceholder(-54, -54));
-		Gumps.Desktop.Children.Add(new GSpellPlaceholder(gameWidth + 6 + 4, -54));
-		Gumps.Desktop.Children.Add(new GSpellPlaceholder(-54, gameHeight + 6 + 4));
-		Gumps.Desktop.Children.Add(new GSpellPlaceholder(gameWidth + 6 + 4, gameHeight + 6 + 4));
-		Gumps.Desktop.Children.Add(new GDesktopBorder());
+		Engine.BuildViewportChrome();
 		Gumps.Desktop.Children.Add(new GBandageTimer());
 		Gumps.Desktop.Children.Add(new GCriminalTimer());
 		Gumps.Desktop.Children.Add(new GMapTracker());
@@ -790,6 +787,129 @@ public class Engine
 		}
 		array2[num7 + array.Length] = new ItemIDValidator(3617, 3817);
 		Gumps.Desktop.Children.Add(new GItemCounters(array2));
+	}
+
+	internal static void BuildViewportChrome()
+	{
+		int gameWidth = Engine.GameWidth;
+		int gameHeight = Engine.GameHeight;
+		int num = gameWidth / 48;
+		int num2 = gameHeight / 48;
+		int num3 = num * 48 - 4;
+		int num4 = num2 * 48 - 4;
+		int num5 = (gameWidth - num3) / 2;
+		int num6 = (gameHeight - num4) / 2;
+		for (int i = 0; i < num; i++)
+		{
+			Gumps.Desktop.Children.Add(new GSpellPlaceholder(num5 + i * 48, -54));
+			Gumps.Desktop.Children.Add(new GSpellPlaceholder(num5 + i * 48, gameHeight + 10));
+		}
+		for (int j = 0; j < num2; j++)
+		{
+			Gumps.Desktop.Children.Add(new GSpellPlaceholder(-54, num6 + j * 48));
+			Gumps.Desktop.Children.Add(new GSpellPlaceholder(gameWidth + 10, num6 + j * 48));
+		}
+		Gumps.Desktop.Children.Add(new GSpellPlaceholder(-54, -54));
+		Gumps.Desktop.Children.Add(new GSpellPlaceholder(gameWidth + 10, -54));
+		Gumps.Desktop.Children.Add(new GSpellPlaceholder(-54, gameHeight + 10));
+		Gumps.Desktop.Children.Add(new GSpellPlaceholder(gameWidth + 10, gameHeight + 10));
+		Gumps.Desktop.Children.Add(new GDesktopBorder());
+	}
+
+	internal static void RebuildViewportChrome()
+	{
+		Gump[] array = Gumps.Desktop.Children.ToArray();
+		foreach (Gump gump in array)
+		{
+			if (gump is GSpellPlaceholder || gump is GDesktopBorder)
+			{
+				Gumps.Destroy(gump);
+			}
+		}
+		Engine.BuildViewportChrome();
+	}
+
+	private static int GetViewportHalfExtentInTiles(int width, int height)
+	{
+		return (int)Math.Ceiling((double)(width + height) / 88.0) + 4;
+	}
+
+	private static int GetViewportBlockDimension(int width, int height)
+	{
+		int viewportHalfExtentInTiles = Engine.GetViewportHalfExtentInTiles(width, height);
+		int num = (viewportHalfExtentInTiles + 7) / 8;
+		if (num < 1)
+		{
+			num = 1;
+		}
+		return num * 2 + 1;
+	}
+
+	internal static ViewportRenderMetrics GetViewportRenderMetrics(int width, int height)
+	{
+		ViewportRenderMetrics viewportRenderMetrics = default(ViewportRenderMetrics);
+		int viewportBlockDimension = Engine.GetViewportBlockDimension(width, height);
+		viewportRenderMetrics.BlockWidth = viewportBlockDimension;
+		viewportRenderMetrics.BlockHeight = viewportBlockDimension;
+		viewportRenderMetrics.CellWidth = viewportRenderMetrics.BlockWidth << 3;
+		viewportRenderMetrics.CellHeight = viewportRenderMetrics.BlockHeight << 3;
+		return viewportRenderMetrics;
+	}
+
+	internal static void UpdateViewportRenderMetrics(int width, int height)
+	{
+		Engine.ViewportRenderMetrics viewportRenderMetrics = Engine.GetViewportRenderMetrics(width, height);
+		Renderer.blockWidth = viewportRenderMetrics.BlockWidth;
+		Renderer.blockHeight = viewportRenderMetrics.BlockHeight;
+		Renderer.cellWidth = viewportRenderMetrics.CellWidth;
+		Renderer.cellHeight = viewportRenderMetrics.CellHeight;
+#if DEBUG
+		Debug.Trace("Viewport metrics: viewport={0}x{1}, blocks={2}x{3}, cells={4}x{5}", width, height, Renderer.blockWidth, Renderer.blockHeight, Renderer.cellWidth, Renderer.cellHeight);
+		if (Renderer.blockWidth >= 11 || Renderer.blockHeight >= 11 || Renderer.cellWidth * Renderer.cellHeight >= 6144)
+		{
+			Debug.Trace("Viewport coverage warning: large coverage requested for viewport {0}x{1}", width, height);
+		}
+#endif
+	}
+
+	internal static void ApplyGameViewportBounds(int x, int y, int width, int height, bool rebuildChrome)
+	{
+		int num = Math.Max(1, Engine.ScreenWidth - Engine.GameBorderSize * 2);
+		int num2 = Math.Max(1, Engine.ScreenHeight - Engine.GameBorderSize * 2);
+		int num3 = Math.Min(Engine.MinimumGameWidth, num);
+		int num4 = Math.Min(Engine.MinimumGameHeight, num2);
+		width = Math.Max(num3, Math.Min(width, num));
+		height = Math.Max(num4, Math.Min(height, num2));
+		int num5 = Math.Max(Engine.GameBorderSize, Engine.ScreenWidth - width - Engine.GameBorderSize);
+		int num6 = Math.Max(Engine.GameBorderSize, Engine.ScreenHeight - height - Engine.GameBorderSize);
+		x = Math.Max(Engine.GameBorderSize, Math.Min(x, num5));
+		y = Math.Max(Engine.GameBorderSize, Math.Min(y, num6));
+		bool flag = Engine.GameX != x || Engine.GameY != y;
+		bool flag2 = Engine.GameWidth != width || Engine.GameHeight != height;
+		if (!flag && !flag2)
+		{
+			return;
+		}
+		Engine.GameX = x;
+		Engine.GameY = y;
+		Engine.GameWidth = width;
+		Engine.GameHeight = height;
+		if (flag2)
+		{
+			Engine.UpdateViewportRenderMetrics(width, height);
+			Renderer.ResetGameViewportResources();
+			Map.Invalidate();
+			GRadar.Invalidate();
+			World.Viewport.Invalidate();
+			if (rebuildChrome)
+			{
+				Engine.RebuildViewportChrome();
+			}
+		}
+		Preferences.Current.Layout.Update();
+		Renderer.Invalidate();
+		Gumps.Invalidate();
+		Engine.Redraw();
 	}
 
 	public static void UseItemByType(int[] itemIDs)
@@ -1040,7 +1160,7 @@ public class Engine
 			return;
 		}
 		newDir &= 7;
-		newDir |= ((!flag2 && Engine.m_dMouse > Engine.GameWidth / 6) ? 128 : 0);
+		newDir |= ((!flag2 && Engine.m_dMouse > MouseRunThresholdPixels) ? 128 : 0);
 		if (!flag2 && Options.Current.AlwaysRun)
 		{
 			newDir |= 0x80;
@@ -3794,41 +3914,35 @@ public class Engine
 
 	public static Direction GetDirection(int x, int y, ref int distance)
 	{
-		int num = Engine.GameX + Engine.GameWidth / 2 - x;
-		int num2 = Engine.GameY + Engine.GameHeight / 2 - y;
-		int num3 = Math.Abs(num);
-		int num4 = Math.Abs(num2);
-		int num5 = (int)((double)Engine.GameWidth / (double)Engine.GameHeight * (double)num4);
-		distance = (int)Math.Sqrt(num * num + num5 * num5);
-		if ((num4 >> 1) - num3 >= 0)
+		Point playerScreenAnchor = Engine.GetPlayerScreenAnchor();
+		int num = x - playerScreenAnchor.X;
+		int num2 = y - playerScreenAnchor.Y;
+		distance = (int)Math.Sqrt((double)(num * num + num2 * num2));
+		Mobile player = World.Player;
+		if (distance <= 8)
 		{
-			if (num2 > 0)
+			if (player != null)
 			{
-				return Direction.Up;
+				return (Direction)(((player.Direction & 7) + 1) & 7);
 			}
 			return Direction.Down;
 		}
-		if ((num3 >> 1) - num4 >= 0)
+		int xTo = (int)Math.Round((double)(num + num2) * (100.0 / 44.0), MidpointRounding.AwayFromZero);
+		int yTo = (int)Math.Round((double)(num2 - num) * (100.0 / 44.0), MidpointRounding.AwayFromZero);
+		if (xTo == 0 && yTo == 0)
 		{
-			if (num > 0)
+			if (player != null)
 			{
-				return Direction.Left;
+				return (Direction)(((player.Direction & 7) + 1) & 7);
 			}
-			return Direction.Right;
+			return Direction.Down;
 		}
-		if (num >= 0 && num2 >= 0)
-		{
-			return Direction.West;
-		}
-		if (num >= 0 && num2 < 0)
-		{
-			return Direction.South;
-		}
-		if (num < 0 && num2 < 0)
-		{
-			return Direction.East;
-		}
-		return Direction.North;
+		return Engine.GetDirection(0, 0, xTo, yTo);
+	}
+
+	private static Point GetPlayerScreenAnchor()
+	{
+		return new Point(Engine.GameX + (Engine.GameWidth >> 1) - 1 - Renderer.m_xScroll, Engine.GameY + (Engine.GameHeight >> 1) - 1 - Renderer.m_yScroll);
 	}
 
 	public static Font GetFont(int id)

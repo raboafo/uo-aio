@@ -340,6 +340,12 @@ public class Renderer
 
 	private static MapSubgroup[] _mapSubgroups;
 
+	private static int _mapSubgroupWidth;
+
+	private static int _mapSubgroupHeight;
+
+	private static long _lastDebugFrameSpikeTicks;
+
 	public static bool _timeRefresh;
 
 	private static Texture lightTexture;
@@ -1891,6 +1897,42 @@ public class Renderer
 		Renderer.m_Invalidate = true;
 	}
 
+#if DEBUG
+	private static void DebugTraceViewportFrameSpike(Stopwatch worldRenderStopwatch)
+	{
+		if (worldRenderStopwatch == null)
+		{
+			return;
+		}
+		worldRenderStopwatch.Stop();
+		if (worldRenderStopwatch.ElapsedMilliseconds < 33L)
+		{
+			return;
+		}
+		long ticks = DateTime.UtcNow.Ticks;
+		if (ticks - Renderer._lastDebugFrameSpikeTicks < TimeSpan.TicksPerSecond)
+		{
+			return;
+		}
+		Renderer._lastDebugFrameSpikeTicks = ticks;
+		Debug.Trace("Viewport render spike: viewport={0}x{1}, blocks={2}x{3}, cells={4}x{5}, elapsed={6}ms", Engine.GameWidth, Engine.GameHeight, Renderer.blockWidth, Renderer.blockHeight, Renderer.cellWidth, Renderer.cellHeight, worldRenderStopwatch.ElapsedMilliseconds);
+	}
+#endif
+
+	public static void ResetGameViewportResources()
+	{
+		if (Renderer.lightSurface != null)
+		{
+			Renderer.lightSurface.Dispose();
+			Renderer.lightSurface = null;
+		}
+		if (Renderer.lightTexture != null)
+		{
+			Renderer.lightTexture.Dispose();
+			Renderer.lightTexture = null;
+		}
+	}
+
 	public static void PushAlpha(float alpha)
 	{
 		alpha *= Renderer._alphaValue;
@@ -2126,15 +2168,17 @@ public class Renderer
 		icon.DrawGame(x, y, color);
 	}
 
-	public static MapSubgroup[] GetMapSubgroups(int size)
+	public static MapSubgroup[] GetMapSubgroups(int width, int height)
 	{
-		if (Renderer._mapSubgroups == null)
+		if (Renderer._mapSubgroups == null || Renderer._mapSubgroupWidth != width || Renderer._mapSubgroupHeight != height)
 		{
-			Renderer._mapSubgroups = new MapSubgroup[size * size * 2];
+			Renderer._mapSubgroupWidth = width;
+			Renderer._mapSubgroupHeight = height;
+			Renderer._mapSubgroups = new MapSubgroup[width * height * 2];
 			int num = 0;
-			for (int i = 0; i < size; i++)
+			for (int i = 0; i < height; i++)
 			{
-				for (int j = 0; j < size; j++)
+				for (int j = 0; j < width; j++)
 				{
 					Renderer._mapSubgroups[num++] = new MapSubgroup(j, i, ground: true);
 					Renderer._mapSubgroups[num++] = new MapSubgroup(j, i, ground: false);
@@ -2372,7 +2416,6 @@ public class Renderer
 			Renderer.m_xScroll = xOffset;
 			Renderer.m_yScroll = yOffset;
 		}
-		int size = ((Renderer.cellWidth < Renderer.cellHeight) ? (Renderer.cellWidth - 1) : (Renderer.cellHeight - 1));
 		Renderer.PushAll();
 		if (Renderer.lightTexture == null)
 		{
@@ -2382,7 +2425,7 @@ public class Renderer
 		{
 			Renderer.lightSurface = Renderer.lightTexture.m_Surface.GetSurfaceLevel(0);
 		}
-		MapSubgroup[] mapSubgroups = Renderer.GetMapSubgroups(size);
+		MapSubgroup[] mapSubgroups = Renderer.GetMapSubgroups(Renderer.cellWidth, Renderer.cellHeight);
 		int num10 = int.MaxValue;
 		int num11 = int.MaxValue;
 		int count = cells[num6 + 1, num7 + 1].Count;
@@ -2669,8 +2712,14 @@ public class Renderer
 			}
 			Renderer.eOffsetX = 0;
 			Renderer.eOffsetY = 0;
+#if DEBUG
+			Stopwatch worldRenderStopwatch = null;
+#endif
 			if (Engine.m_Ingame)
 			{
+#if DEBUG
+				worldRenderStopwatch = Stopwatch.StartNew();
+#endif
 				if (GDesktopBorder.Instance != null)
 				{
 					GDesktopBorder.Instance.DoRender();
@@ -3010,9 +3059,8 @@ public class Renderer
 				StaticItem staticItem = null;
 				Item item = null;
 				bool xDouble = false;
-				int size = ((Renderer.cellWidth < Renderer.cellHeight) ? (Renderer.cellWidth - 1) : (Renderer.cellHeight - 1));
 				TerrainMeshProvider current2 = TerrainMeshProviders.Current;
-				MapSubgroup[] mapSubgroups = Renderer.GetMapSubgroups(size);
+				MapSubgroup[] mapSubgroups = Renderer.GetMapSubgroups(Renderer.cellWidth, Renderer.cellHeight);
 				for (int num38 = 0; num38 < mapSubgroups.Length; num38 = num12)
 				{
 					MapSubgroup mapSubgroup = mapSubgroups[num38];
@@ -3931,6 +3979,9 @@ public class Renderer
 				{
 					Renderer._profile._worldTime.Stop();
 				}
+#if DEBUG
+				Renderer.DebugTraceViewportFrameSpike(worldRenderStopwatch);
+#endif
 				Renderer.SetViewport(0, 0, Engine.ScreenWidth, Engine.ScreenHeight);
 				if (Renderer.lightTexture != null)
 				{
@@ -4478,7 +4529,7 @@ public class Renderer
 		Renderer._tex1 = null;
 		Renderer._psh = null;
 		Renderer._backBuffer = null;
-		Renderer.lightSurface = null;
+		Renderer.ResetGameViewportResources();
 		Renderer.m_CurBlendType = (DrawBlendType)(-1);
 		Renderer.m_CurAlphaTest = false;
 		Renderer.m_CurFilter = false;
