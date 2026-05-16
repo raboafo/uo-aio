@@ -228,7 +228,7 @@ public class GWindowsButton : Gump, IClickable
 				this.CaptionDown = false;
 				break;
 			case 1:
-				GumpPaint.DrawFlat(x, y, this.m_Width, this.m_Height, GumpColors.ControlDarkDark, GumpColors.ControlAlternate);
+				GumpPaint.DrawFlat(x, y, this.m_Width, this.m_Height, GumpColors.ControlDarkDark, GumpColors.ControlLightLight);
 				this.CaptionDown = false;
 				break;
 			case 2:

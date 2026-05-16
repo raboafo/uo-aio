@@ -20,7 +20,7 @@ public class GComboBox : GBackground
 
 	private GBackground m_Dropdown;
 
-	private GButton m_Button;
+	private Gump m_Button;
 
 	public string[] List
 	{
@@ -114,10 +114,28 @@ public class GComboBox : GBackground
 		base.m_Children.Add(this.m_Button);
 		this.m_Button.Center();
 		this.m_Button.X = base.OffsetX + base.UseWidth - this.m_Button.Width - 1;
-		GButton button = this.m_Button;
+		Gump button = this.m_Button;
 		int y = button.Y + 1;
 		button.Y = y;
 		this.List = List;
 		this.Index = Index;
+	}
+
+	public GComboBox(string[] list, int index, int x, int y, int width, int height, IFont font, IHue regularHue, IHue overHue)
+		: base(3004, width, height, x, y, HasBorder: true)
+	{
+		this.m_BackID = 3004;
+		this.m_Font = font;
+		this.m_HRegular = regularHue;
+		this.m_HOver = overHue;
+		GWindowsButton gWindowsButton = new GWindowsButton("v", 0, 0, 22, System.Math.Max(18, height - 6));
+		gWindowsButton.Style = WindowsButtonStyle.Flat;
+		gWindowsButton.OnClick = OpenList_OnClick;
+		base.m_Children.Add(gWindowsButton);
+		this.m_Button = gWindowsButton;
+		this.m_Button.X = base.OffsetX + base.UseWidth - this.m_Button.Width - 3;
+		this.m_Button.Y = (height - this.m_Button.Height) / 2;
+		this.List = list;
+		this.Index = index;
 	}
 }
