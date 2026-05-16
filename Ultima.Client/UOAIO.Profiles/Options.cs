@@ -421,6 +421,13 @@ public class Options : PersistableObject
 		this.m_HouseLevel = 1;
 	}
 
+	internal void ApplyState(OptionFlag flags, NotoQueryType notoQuery, int houseLevel)
+	{
+		this.m_Flags = flags;
+		this.m_NotoQuery = notoQuery;
+		this.HouseLevel = houseLevel;
+	}
+
 	protected override void SerializeAttributes(PersistanceWriter op)
 	{
 		OptionFlag flags = this.m_Flags;

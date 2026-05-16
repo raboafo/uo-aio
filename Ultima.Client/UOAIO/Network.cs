@@ -44,7 +44,8 @@ public class Network
 			{
 				if (Network._packetLogger == null)
 				{
-					Network._packetLogger = new PacketLogger(ClientRuntimeEnvironment.CreateRuntimeTextWriter("data/ultima/logs/PacketTrace_all.log", append: true));
+					string captureFileName = $"Packets.{DateTimeOffset.UtcNow:yyyyMMdd-HHmmssfff}.log";
+					Network._packetLogger = new PacketLogger(ClientRuntimeEnvironment.CreateLogTextWriter(captureFileName, append: false, network: true));
 				}
 				Network._networkContext.RegisterDiagnostic(Network._packetLogger);
 			}

@@ -46,6 +46,8 @@ public sealed class LauncherPaths
 {
     public string DataRoot { get; init; } = string.Empty;
 
+    public string LogFilePath { get; init; } = string.Empty;
+
     public string StateFilePath { get; init; } = string.Empty;
 
     public string ActiveShardStateFilePath { get; init; } = string.Empty;
@@ -62,6 +64,7 @@ public sealed class LauncherPaths
         return new LauncherPaths
         {
             DataRoot = dataRoot,
+            LogFilePath = Path.Combine(dataRoot, "launcher.log"),
             StateFilePath = Path.Combine(dataRoot, "launcher-state.json"),
             ActiveShardStateFilePath = Path.Combine(dataRoot, "active-shard-state.json"),
             ShardStateDirectory = Path.Combine(dataRoot, "shards"),

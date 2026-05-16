@@ -71,6 +71,8 @@ public class ScavengerAgent : PersistableObject, IItemValidator, IComparer
 
 	public ItemRefCollection Items => this.m_Items;
 
+	internal int OptionsValue => (int)this.m_Options;
+
 	public ItemRef this[Item item]
 	{
 		get
@@ -117,6 +119,21 @@ public class ScavengerAgent : PersistableObject, IItemValidator, IComparer
 	{
 		this.m_Items = new ItemRefCollection();
 		this.m_Options = ScavengerOptions.Default;
+	}
+
+	internal void ApplyState(int options, ItemRef[] items)
+	{
+		this.m_Options = (ScavengerOptions)options;
+		this.m_Items.Clear();
+		if (items == null)
+		{
+			return;
+		}
+
+		for (int i = 0; i < items.Length; i++)
+		{
+			this.m_Items.Add(items[i]);
+		}
 	}
 
 	public void Scavenge(bool isManual)

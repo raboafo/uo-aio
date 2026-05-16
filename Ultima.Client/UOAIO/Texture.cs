@@ -425,7 +425,7 @@ public class Texture
 				Debug.Trace(text);
 				if (streamWriter == null)
 				{
-					streamWriter = new StreamWriter(Engine.FileManager.CreateUniqueRuntime("data/ultima/logs/textures", ".log"));
+					streamWriter = new StreamWriter(ClientRuntimeEnvironment.CreateUniqueLogFileStream("textures", ".log"));
 				}
 				streamWriter.WriteLine(text);
 				streamWriter.Flush();

@@ -93,7 +93,11 @@ public class Macros
 
 	private static string GetConfigurationPath()
 	{
-		string text = ClientRuntimeEnvironment.RuntimeDataPath("config/Macros.xml");
+		if (!ClientRuntimeEnvironment.TryCharacterDataPath("Macros.xml", out string text))
+		{
+			return null;
+		}
+
 		DirectoryInfo directoryInfo = new DirectoryInfo(Path.GetDirectoryName(text));
 		if (!directoryInfo.Exists)
 		{
@@ -106,31 +110,7 @@ public class Macros
 	{
 		MacroConfig macroConfig = new MacroConfig();
 		string configurationPath = Macros.GetConfigurationPath();
-		if (!File.Exists(configurationPath))
-		{
-			string text = Engine.FileManager.BasePath("data/ultima/macros/macros.xml");
-			if (File.Exists(text))
-			{
-				try
-				{
-					File.Move(text, configurationPath);
-				}
-				catch
-				{
-					File.Copy(text, configurationPath, overwrite: false);
-				}
-			}
-			else
-			{
-				ArchivedFile archivedFile = Engine.FileManager.GetArchivedFile("play/macros/macros.xml");
-				if (archivedFile != null)
-				{
-					using FileStream output = new FileStream(configurationPath, FileMode.Create, FileAccess.Write, FileShare.None);
-					archivedFile.Download(output);
-				}
-			}
-		}
-		if (File.Exists(configurationPath))
+		if (!string.IsNullOrWhiteSpace(configurationPath) && File.Exists(configurationPath))
 		{
 			using FileStream stream = new FileStream(configurationPath, FileMode.Open, FileAccess.Read, FileShare.Read);
 			XmlPersistanceReader xmlPersistanceReader = new XmlPersistanceReader(stream);
@@ -222,7 +202,13 @@ public class Macros
 
 	public static void Save()
 	{
-		XmlPersistanceWriter.SaveObject(Macros.Config, Macros.GetConfigurationPath());
+		string configurationPath = Macros.GetConfigurationPath();
+		if (string.IsNullOrWhiteSpace(configurationPath))
+		{
+			return;
+		}
+
+		XmlPersistanceWriter.SaveObject(Macros.Config, configurationPath);
 	}
 
 	public static string GetMobilePath(Mobile mob)

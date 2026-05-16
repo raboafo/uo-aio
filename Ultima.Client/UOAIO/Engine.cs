@@ -2249,7 +2249,8 @@ public class Engine
 
 		Engine.WantDirectory("data/");
 		Engine.WantDirectory("data/ultima/");
-		Engine.WantRuntimeDirectory("data/ultima/logs/");
+		Directory.CreateDirectory(ClientRuntimeEnvironment.LogPath(string.Empty));
+		Directory.CreateDirectory(ClientRuntimeEnvironment.NetworkLogPath(string.Empty));
 		Debug.Block("Environment");
 		Debug.Trace("Operating System = '{0}'", Environment.OSVersion);
 		Debug.Trace(".NET Framework   = '{0}'", Environment.Version);
@@ -2708,6 +2709,7 @@ public class Engine
 		Engine.ClientDef = bootstrap;
 		Engine.Shard = bootstrap.Shard;
 		Engine.ActiveShardRuntime = bootstrap.Shard;
+		ClientRuntimeEnvironment.SetShardContext(bootstrap.Shard);
 		PacketHandlers.ResetHandlers();
 		Engine.ShardHandler = Engine.ShardHandlers.Resolve(Engine.ActiveShardRuntime.Id);
 		Engine.ShardHandler.InitializeBootstrap(bootstrap);

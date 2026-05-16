@@ -28,7 +28,8 @@ public class Profile : PersistableObject
 			if (Profile.m_Current == null || current != Profile.m_Player)
 			{
 				Profile.m_Player = current;
-				Profile.m_Current = ((current == null) ? Config.Current.Profiles["Default"] : Config.Current.Profiles[current.Profile]);
+				string profileName = (current == null) ? ClientRuntimeEnvironment.ActiveProfileName : current.Profile;
+				Profile.m_Current = Config.Current.Profiles[profileName];
 			}
 			return Profile.m_Current;
 		}
@@ -54,6 +55,18 @@ public class Profile : PersistableObject
 		this.m_Name = name;
 		this.m_Preferences = new Preferences();
 		this.m_GuildRoster = new GuildRoster();
+	}
+
+	internal void ApplyRuntimeState(Preferences preferences, GuildRoster guildRoster)
+	{
+		this.m_Preferences = preferences ?? new Preferences();
+		this.m_GuildRoster = guildRoster ?? new GuildRoster();
+	}
+
+	internal static void InvalidateCurrent()
+	{
+		Profile.m_Player = null;
+		Profile.m_Current = null;
 	}
 
 	protected override void SerializeAttributes(PersistanceWriter op)

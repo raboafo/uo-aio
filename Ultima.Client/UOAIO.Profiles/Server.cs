@@ -58,6 +58,17 @@ public class Server : PersistableObject
 		this.m_TravelAgent = new TravelAgent();
 	}
 
+	internal void ApplyRuntimeState(ServerRuntimeState serverState, Player player)
+	{
+		this.m_IgnoreList = serverState?.IgnoreList ?? new IgnoreList();
+		this.m_TravelAgent = serverState?.TravelAgent ?? new TravelAgent();
+		this.m_Players.Clear();
+		if (player != null)
+		{
+			this.m_Players.Add(player);
+		}
+	}
+
 	protected override void SerializeAttributes(PersistanceWriter op)
 	{
 		op.SetString("name", this.m_Name);

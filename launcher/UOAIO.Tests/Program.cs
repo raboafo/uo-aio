@@ -409,24 +409,18 @@ internal static class Program
 
             string runtimeRoot = Path.Combine(appRoot, "runtime-root");
             Environment.SetEnvironmentVariable("UOAIO_CLIENT_RUNTIME_ROOT", runtimeRoot);
-            string sessionRoot = Path.Combine(runtimeRoot, "sessions");
-            Directory.CreateDirectory(sessionRoot);
-            string expiredSessionPath = Path.Combine(sessionRoot, "expired-test-session-" + Guid.NewGuid().ToString("N"));
-            Directory.CreateDirectory(expiredSessionPath);
-            Directory.SetLastWriteTimeUtc(expiredSessionPath, DateTime.UtcNow.AddHours(-30));
 
             ClientProcessLauncher launcher = new();
             ProcessStartInfo startInfo = launcher.CreateStartInfo(appRoot, pipeName);
             string resolvedExecutablePath = Path.GetFullPath(startInfo.FileName);
             string runtimeDataRoot = ExtractCommandArgument(startInfo.Arguments, "--runtime-data-root");
             Assert(resolvedExecutablePath == Path.GetFullPath(clientExePath), "Expected launcher to execute the client host in place.");
-            Assert(Directory.Exists(runtimeDataRoot), "Expected runtime session data directory to be created.");
+            Assert(Directory.Exists(runtimeDataRoot), "Expected runtime data root directory to be created.");
+            Assert(Path.GetFullPath(runtimeDataRoot) == Path.GetFullPath(runtimeRoot), "Expected launcher to pass the stable runtime root.");
             Assert(startInfo.Arguments.Contains("--bootstrap-pipe", StringComparison.Ordinal), "Expected bootstrap pipe argument.");
             Assert(startInfo.Arguments.Contains(pipeName, StringComparison.Ordinal), "Expected bootstrap pipe name in arguments.");
             Assert(startInfo.Arguments.Contains("--runtime-data-root", StringComparison.Ordinal), "Expected runtime data root argument.");
             Assert(Path.GetFullPath(startInfo.WorkingDirectory!) == Path.GetFullPath(appRoot), "Expected app-root working directory.");
-            Assert(!Directory.Exists(expiredSessionPath), "Expected expired staged sessions to be pruned.");
-            Directory.Delete(runtimeDataRoot, recursive: true);
         }
         finally
         {

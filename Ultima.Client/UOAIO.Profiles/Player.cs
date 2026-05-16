@@ -117,7 +117,7 @@ public class Player : Character
 	public Player(Mobile mob)
 		: base(mob)
 	{
-		this.m_Profile = "Default";
+		this.m_Profile = ClientRuntimeEnvironment.ActiveProfileName;
 		this.m_Friends = new Friends();
 		this.m_UseOnceAgent = new UseOnceAgent();
 		this.equipAgent = new EquipAgent();
@@ -125,6 +125,21 @@ public class Player : Character
 		this.OrganizeAgent = new OrganizeAgent();
 		this.m_GuildRoster = new GuildRoster();
 		this.m_AutomationOptions = new AutomationOptions();
+	}
+
+	internal void SetProfileName(string profileName)
+	{
+		if (!string.IsNullOrWhiteSpace(profileName))
+		{
+			this.m_Profile = profileName;
+		}
+	}
+
+	internal static void InvalidateCurrent()
+	{
+		Player.m_Server = null;
+		Player.m_Player = null;
+		Player.m_Runes = null;
 	}
 
 	protected override void SerializeAttributes(PersistanceWriter op)

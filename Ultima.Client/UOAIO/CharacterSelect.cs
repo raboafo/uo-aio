@@ -29,6 +29,7 @@ public partial class CharacterSelect : Window
 			return;
 		}
 
+		ClientRuntimeEnvironment.SelectCharacter(characterInfo.Name);
 		IPAddress ipAddress = IPAddress.Parse("1.1.1.1");
 		int address = BitConverter.ToInt32(ipAddress.GetAddressBytes(), 0);
 		Network.Send(new PCharacterSelect(characterInfo.Name, characterInfo.Index, address));

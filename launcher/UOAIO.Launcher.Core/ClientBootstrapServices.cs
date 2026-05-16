@@ -69,7 +69,6 @@ public sealed class ClientProcessLauncher
     {
         "Ultima.Client.Host.exe"
     };
-    private static readonly TimeSpan SessionRetention = TimeSpan.FromHours(24);
 
     public ProcessStartInfo CreateStartInfo(string appBaseDirectory, string bootstrapPipeName)
     {
@@ -79,7 +78,7 @@ public sealed class ClientProcessLauncher
         }
 
         string executablePath = ResolveClientExecutablePath(appBaseDirectory);
-        string runtimeDataDirectory = CreateRuntimeDataSessionDirectory();
+        string runtimeDataDirectory = ResolveRuntimeDataRoot();
         return new ProcessStartInfo(executablePath)
         {
             Arguments = $"--bootstrap-pipe \"{bootstrapPipeName}\" --runtime-data-root \"{runtimeDataDirectory}\"",
@@ -152,60 +151,28 @@ public sealed class ClientProcessLauncher
         throw new FileNotFoundException("Unable to locate Ultima.Client.Host.exe from the launcher directory.");
     }
 
-    public string CreateRuntimeDataSessionDirectory()
+    public string ResolveRuntimeDataRoot()
     {
-        string sessionRoot = GetSessionRootPath();
-
-        Directory.CreateDirectory(sessionRoot);
-        PruneExpiredSessions(sessionRoot, DateTimeOffset.UtcNow);
-
-        string runtimeDataDirectory = Path.Combine(
-            sessionRoot,
-            $"{DateTimeOffset.UtcNow:yyyyMMdd-HHmmssfff}-{Guid.NewGuid():N}");
-
-        Directory.CreateDirectory(runtimeDataDirectory);
-        return runtimeDataDirectory;
+        string runtimeDataRoot = GetRuntimeDataRootPath();
+        Directory.CreateDirectory(runtimeDataRoot);
+        return runtimeDataRoot;
     }
 
-    private static string GetSessionRootPath()
+    private static string GetRuntimeDataRootPath()
     {
         string? overrideRoot = Environment.GetEnvironmentVariable("UOAIO_CLIENT_RUNTIME_ROOT");
         if (!string.IsNullOrWhiteSpace(overrideRoot))
         {
-            return Path.Combine(overrideRoot, "sessions");
+            return Path.GetFullPath(overrideRoot);
         }
 
         string localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
         if (string.IsNullOrWhiteSpace(localAppData))
         {
-            throw new InvalidOperationException("Unable to determine the LocalApplicationData folder for client runtime session data.");
+            throw new InvalidOperationException("Unable to determine the LocalApplicationData folder for client runtime data.");
         }
 
-        return Path.Combine(localAppData, "UOAIO", "ClientRuntime", "sessions");
-    }
-
-    private static void PruneExpiredSessions(string sessionRoot, DateTimeOffset nowUtc)
-    {
-        foreach (string directoryPath in Directory.EnumerateDirectories(sessionRoot))
-        {
-            try
-            {
-                DirectoryInfo directory = new(directoryPath);
-                DateTimeOffset lastWriteUtc = directory.LastWriteTimeUtc;
-                if (nowUtc - lastWriteUtc <= SessionRetention)
-                {
-                    continue;
-                }
-
-                directory.Delete(recursive: true);
-            }
-            catch (IOException)
-            {
-            }
-            catch (UnauthorizedAccessException)
-            {
-            }
-        }
+        return Path.Combine(localAppData, "UOAIO");
     }
 
     private static IEnumerable<string> EnumerateCandidatePaths(string appBaseDirectory)

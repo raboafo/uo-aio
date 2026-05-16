@@ -14,10 +14,6 @@ public class Config : PersistableObject
 
 	private ServerList m_Servers;
 
-	private const string RelativeUserDataPath = "config/Configuration.xml";
-
-	private const string RelativeLegacyPath = "config.xml";
-
 	public override PersistableType TypeID => Config.TypeCode;
 
 	public ProfileList Profiles => this.m_Profiles;
@@ -36,51 +32,48 @@ public class Config : PersistableObject
 		this.Load();
 	}
 
-	private static string GetConfigurationPath()
-	{
-		string text = ClientRuntimeEnvironment.RuntimeDataPath("config/Configuration.xml");
-		DirectoryInfo directoryInfo = new DirectoryInfo(Path.GetDirectoryName(text));
-		if (!directoryInfo.Exists)
-		{
-			directoryInfo.Create();
-		}
-		return text;
-	}
-
 	public void Load()
 	{
-		string configurationPath = Config.GetConfigurationPath();
-		if (!File.Exists(configurationPath))
+		this.m_Profiles = new ProfileList();
+		this.m_Servers = new ServerList();
+
+		string profileName = ClientRuntimeEnvironment.ActiveProfileName;
+		CharacterRuntimeState characterState = RuntimeProfileStores.LoadCharacterState();
+		Profile profile = this.m_Profiles[profileName];
+		profile.ApplyRuntimeState(RuntimeProfileStores.CreatePreferencesOrDefault(), characterState?.GuildRoster);
+
+		string serverName = Engine.m_ServerName;
+		if (string.IsNullOrWhiteSpace(serverName))
 		{
-			string text = Engine.FileManager.BasePath("config.xml");
-			if (File.Exists(text))
-			{
-				try
-				{
-					File.Move(text, configurationPath);
-				}
-				catch
-				{
-					File.Copy(text, configurationPath, overwrite: false);
-				}
-			}
+			serverName = ClientRuntimeEnvironment.ServerName;
 		}
-		if (File.Exists(configurationPath))
+
+		if (!string.IsNullOrWhiteSpace(serverName))
 		{
-			using (FileStream stream = new FileStream(configurationPath, FileMode.Open, FileAccess.Read, FileShare.Read))
-			{
-				XmlPersistanceReader xmlPersistanceReader = new XmlPersistanceReader(stream);
-				xmlPersistanceReader.ReadDocument(this);
-				xmlPersistanceReader.Close();
-			}
+			Player player = characterState?.Player;
+			player?.SetProfileName(profileName);
+			Server server = this.m_Servers[serverName];
+			server.ApplyRuntimeState(RuntimeProfileStores.LoadServerState(), player);
 		}
 	}
 
 	public void Save()
 	{
-		XmlPersistanceWriter xmlPersistanceWriter = new XmlPersistanceWriter(Config.GetConfigurationPath());
-		xmlPersistanceWriter.WriteDocument(this);
-		xmlPersistanceWriter.Close();
+		Profile profile = Profile.Current;
+		RuntimeProfileStores.SavePreferences(profile.Preferences);
+
+		string serverName = Engine.m_ServerName;
+		if (string.IsNullOrWhiteSpace(serverName))
+		{
+			serverName = ClientRuntimeEnvironment.ServerName;
+		}
+
+		if (!string.IsNullOrWhiteSpace(serverName))
+		{
+			RuntimeProfileStores.SaveServerState(this.m_Servers[serverName]);
+		}
+
+		RuntimeProfileStores.SaveCharacterState(profile, Player.Current);
 	}
 
 	protected override void SerializeChildren(PersistanceWriter op)
